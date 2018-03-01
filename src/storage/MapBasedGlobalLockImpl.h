@@ -4,7 +4,8 @@
 #include <map>
 #include <mutex>
 #include <string>
-
+#include <unordered_map>
+#include "list_lru.cpp"
 #include <afina/Storage.h>
 
 namespace Afina {
@@ -17,7 +18,9 @@ namespace Backend {
  */
 class MapBasedGlobalLockImpl : public Afina::Storage {
 public:
-    MapBasedGlobalLockImpl(size_t max_size = 1024) : _max_size(max_size) {}
+    MapBasedGlobalLockImpl(size_t max_size = 1024)
+    : _max_size(max_size)
+    , _current_size(0) {}
     ~MapBasedGlobalLockImpl() {}
 
     // Implements Afina::Storage interface
@@ -35,9 +38,16 @@ public:
     // Implements Afina::Storage interface
     bool Get(const std::string &key, std::string &value) const override;
 
+    // Deletes the last element of _backend
+    bool DeleteTail();
+
 private:
+    using value_type = std::string;
+
     size_t _max_size;
-    std::map<std::string, std::string> _backend;
+    size_t _current_size;
+    std::unordered_map<std::string, node<value_type>* > _backend; //contains key and pointer to node with value and key
+    list_lru<value_type> _values_list; //pair of key and value
 };
 
 } // namespace Backend
