@@ -1,13 +1,14 @@
-//
-// Created by Evgeny Zholkovskiy on 21/02/2018.
-//
 
-#ifndef TEST1_LIST_H
-#define TEST1_LIST_H
+#ifndef LIST_LRU_CPP
+#define LIST_LRU_CPP
 
 
 #include <iostream>
+#include <functional>
 using namespace std;
+
+
+
 
 template <class T>
 struct node
@@ -18,11 +19,13 @@ struct node
     node<T>* prev;
 };
 
+
+
 template <class T>
 class list_lru
 {
 
-public:
+private:
     size_t size;
     node<T>* head;
     node<T>* tail;
@@ -31,6 +34,7 @@ public:
 
     using reference = T&;
     using const_reference = const T&;
+
 
     list_lru() {
         list_lru::size = 0;
@@ -49,12 +53,11 @@ public:
     }
 
 
-    void push_back(const T value, const std::string &key="") {
+    void push_back(const T value) {
 
         node<T>* new_node = new node<T>;
 
         new_node->value = value;
-        new_node->key = key;
         new_node->next = nullptr;
         new_node->prev = tail;
 
@@ -71,12 +74,11 @@ public:
     }
 
 
-    void push_front(const T value, const std::string &key="") {
+    void push_front(const T value) {
 
         node<T>* new_node = new node<T>;
 
         new_node->value = value;
-        new_node->key = key;
         new_node->next = head;
         new_node->prev = nullptr;
 
@@ -138,7 +140,6 @@ public:
         if (num == 0) {
             return;
         }
-
 
         node<T>* node = node_n(num);
         node->prev->next = node->next;
@@ -226,6 +227,7 @@ public:
         auto node = node_n(num);
         return node->key;
     }
+
     std::string get_key(node<T>* node) {
         return node->key;
     }
@@ -246,4 +248,4 @@ public:
     }
 };
 
-#endif //TEST1_LIST_H
+#endif //LIST_LRU_CPP
