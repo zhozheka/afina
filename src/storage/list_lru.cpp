@@ -9,7 +9,6 @@ using namespace std;
 
 
 
-
 template <class T>
 struct node
 {
