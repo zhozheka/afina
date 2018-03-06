@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include "list_lru.cpp"
 #include <afina/Storage.h>
+#include <functional>
 
 namespace Afina {
 namespace Backend {
@@ -46,8 +47,16 @@ private:
 
     size_t _max_size;
     size_t _current_size;
-    std::unordered_map<std::string, node<value_type>* > _backend; //contains key and pointer to node with value and key
-    list_lru<value_type> _values_list; //pair of key and value
+
+    mutable std::unordered_map <std::reference_wrapper<const std::string>,
+                                node<std::string>*,
+                                std::hash<std::string>,
+                                std::equal_to<std::string>
+                                > _backend;
+
+    mutable list_lru<value_type> _values_list; //pair of key and value
+    mutable std::mutex _m;
+
 };
 
 } // namespace Backend

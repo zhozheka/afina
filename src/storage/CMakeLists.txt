@@ -1,6 +1,7 @@
 # build service
 set(SOURCE_FILES
     MapBasedGlobalLockImpl.cpp
+    list_lru.cpp
 )
 
 add_library(Storage ${SOURCE_FILES})

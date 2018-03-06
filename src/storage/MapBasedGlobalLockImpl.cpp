@@ -1,8 +1,5 @@
 #include "MapBasedGlobalLockImpl.h"
 
-#include <mutex>
-#include "list_lru.cpp"
-
 namespace Afina {
 namespace Backend {
 
@@ -10,10 +7,13 @@ namespace Backend {
 
 
 bool MapBasedGlobalLockImpl::Put(const std::string &key, const std::string &value) {
+
+    std::lock_guard<std::mutex> lock(_m);
+
     auto find_element = _backend.find(key);
     if (find_element != _backend.end())
     {
-        if (Delete(key) == false) {//delete old
+        if (Delete(key) == false) { //delete old
             return false;
         }
     }
@@ -23,6 +23,8 @@ bool MapBasedGlobalLockImpl::Put(const std::string &key, const std::string &valu
 
 // See MapBasedGlobalLockImpl.h
 bool MapBasedGlobalLockImpl::PutIfAbsent(const std::string &key, const std::string &value) {
+
+    std::lock_guard<std::mutex> lock(_m);
 
     auto find_element = _backend.find(key);
 
@@ -45,8 +47,8 @@ bool MapBasedGlobalLockImpl::PutIfAbsent(const std::string &key, const std::stri
     }
     //put new element
     _values_list.push_front(value);
-    _values_list.get_head()->key = key;
-    _backend[key] = _values_list.get_head();
+    _values_list.get_head()->key = key; //
+    _backend[_values_list.get_head()->key] = _values_list.get_head();
     _current_size += new_element_size;
 
     return true;
@@ -54,7 +56,9 @@ bool MapBasedGlobalLockImpl::PutIfAbsent(const std::string &key, const std::stri
 
 // See MapBasedGlobalLockImpl.h
 bool MapBasedGlobalLockImpl::Set(const std::string &key, const std::string &value) {
-    //check if key exists
+
+    std::lock_guard<std::mutex> lock(_m);
+
     auto find_element = _backend.find(key);
     if (find_element == _backend.end()) {
         //element is absent
@@ -71,6 +75,8 @@ bool MapBasedGlobalLockImpl::Set(const std::string &key, const std::string &valu
 // See MapBasedGlobalLockImpl.h
 bool MapBasedGlobalLockImpl::Delete(const std::string &key) {
 
+    std::lock_guard<std::mutex> lock(_m);
+
     auto element = _backend.find(key);
     if (element == _backend.end()) {
         //element is absent
@@ -78,9 +84,8 @@ bool MapBasedGlobalLockImpl::Delete(const std::string &key) {
     }
 
     auto node = element->second;
-    size_t element_size = node->key.size() + node->value.size(); //get size
-
-    _backend.erase(element); //delete from map
+    size_t element_size = key.size() + node->value.size(); //get size
+    _backend.erase(key); //delete from map
     _values_list.remove(node); //delete from list
 
     _current_size -= element_size; //correct size
@@ -89,6 +94,8 @@ bool MapBasedGlobalLockImpl::Delete(const std::string &key) {
 
 // See MapBasedGlobalLockImpl.h
 bool MapBasedGlobalLockImpl::Get(const std::string &key, std::string &value) const {
+
+    std::lock_guard<std::mutex> lock(_m);
 
     auto find_element = _backend.find(key);
     if (find_element == _backend.end()) {
@@ -103,6 +110,8 @@ bool MapBasedGlobalLockImpl::Get(const std::string &key, std::string &value) con
 
 bool MapBasedGlobalLockImpl::DeleteTail() {
 
+    std::lock_guard<std::mutex> lock(_m);
+    
     auto tail_key = _values_list.get_tail()->key;
     return Delete(tail_key);
 }
