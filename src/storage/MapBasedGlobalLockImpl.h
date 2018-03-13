@@ -5,7 +5,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
-#include "list_lru.cpp"
+#include "list_lru.h"
 #include <afina/Storage.h>
 #include <functional>
 
@@ -42,19 +42,23 @@ public:
     // Deletes the last element of _backend
     bool DeleteTail();
 
-private:
+
     using value_type = std::string;
+
+    mutable list_lru<value_type> _values_list; //pair of key and value
+
+    using backend_wrapper  =  std::unordered_map <std::reference_wrapper<const std::string>,
+    node<std::string>*,
+    std::hash<std::string>,
+    std::equal_to<std::string>>;
+    mutable backend_wrapper _backend;
+    
+private:
+
 
     size_t _max_size;
     size_t _current_size;
 
-    mutable std::unordered_map <std::reference_wrapper<const std::string>,
-                                node<std::string>*,
-                                std::hash<std::string>,
-                                std::equal_to<std::string>
-                                > _backend;
-
-    mutable list_lru<value_type> _values_list; //pair of key and value
     mutable std::mutex _m;
 
 };

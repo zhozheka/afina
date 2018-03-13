@@ -35,11 +35,11 @@ public:
     using const_reference = const T&;
 
 
-    list_lru() {
-        list_lru::size = 0;
-        list_lru::head = nullptr;
-        list_lru::tail = nullptr;
-    }
+    list_lru()
+        : size(0)
+        , head(nullptr)
+        , tail(nullptr) {}
+
 
 
     ~list_lru() {
@@ -51,47 +51,62 @@ public:
         }
     }
 
+    void print(const std::string &value) {
+        auto it = head;
+        int n = 0;
+        cout << "------------" << value << "------------" << endl;
+        cout << "head = " << head << endl;
+        cout << "tail = " << tail << endl;
 
-    void push_back(const T value) {
-
-        node<T>* new_node = new node<T>;
-
-        new_node->value = value;
-        new_node->next = nullptr;
-        new_node->prev = tail;
-
-
-        if (size == 0) {
-            head = new_node;
-            tail = new_node;
+        while(it != nullptr) {
+            cout << endl << "node " << n << "-------" << endl;
+            cout << "   prev = " << it->prev << endl;
+            cout << "   key = " << it->key << endl;
+            cout << "   value = " << it->value << endl;
+            cout << "   next = " << it->next << endl;
+            it = it->next;
+            n++;
         }
-        else {
-            tail->next = new_node;
-        }
-        tail = new_node;
-        size++;
     }
 
 
+    // void push_front(const T value) {
+    //
+    //     node<T>* new_node = new node<T>;
+    //
+    //     new_node->value = value;
+    //     new_node->next = head;
+    //     new_node->prev = nullptr;
+    //
+    //     if (size == 0) {
+    //         tail = new_node;
+    //         head = new_node;
+    //     }
+    //     else {
+    //         head->prev = new_node;
+    //     }
+    //     head = new_node;
+    //     size++;
+    // }
     void push_front(const T value) {
-
         node<T>* new_node = new node<T>;
 
         new_node->value = value;
-        new_node->next = head;
-        new_node->prev = nullptr;
 
-        if (size == 0) {
-            tail = new_node;
+        if (head == nullptr) {
+            new_node->prev = nullptr;
+            new_node->next = nullptr;
             head = new_node;
+            tail = new_node;
         }
         else {
-            head->prev = new_node;
+            new_node->prev = nullptr;
+            new_node->next = head;
+            new_node->next->prev = new_node;
+            head = new_node;
         }
-        head = new_node;
         size++;
     }
-
 
     void pop_back() {
 
@@ -114,43 +129,46 @@ public:
     }
 
 
-    void pop_front() {
+    //
+    // void make_head (node<T>* node) {
+    //
+    //     node->prev->next = node->next;
+    //     if (node != tail)
+    //     {
+    //         node->next->prev = node->prev;
+    //     }
+    //
+    //     node->prev = nullptr;
+    //     node->next = head;
+    //     head = node;
+    // }
 
-        if (size == 0) {
-        }
-        else if (size == 1) {
+    void make_head (node<T>* node) {
 
-            delete head;
-            head = nullptr;
-            tail = nullptr;
-            size = 0;
-        }
-        else {
-            auto new_head = head->next;
-            delete head;
-            head = new_head;
-            head->prev = nullptr;
-            size--;
-        }
-    }
-
-    void make_head(size_t num) {
-
-        if (num == 0) {
+        if (node == head) {
             return;
         }
+        else if (node == tail) {
+            //return;
+            tail = node->prev;
+            tail->next = nullptr;
 
-        node<T>* node = node_n(num);
-        node->prev->next = node->next;
-        if (num != size-1) {
-            node->next->prev = node->prev;
+            node->next = head;
+            node->prev = nullptr;
+            head->prev = node;
+            head = node;
+
         }
+        else {
+            return;
+            node->prev->next = node->next;
+            node->next->prev = node->prev;
 
-        node->prev = nullptr;
-        node->next = head;
-        head = node;
+            node->prev = nullptr;
+            node->next = head;
+            head = node;
+        }
     }
-
 
     node<T>* get_head() {
         return head;
@@ -160,10 +178,6 @@ public:
         return tail;
     }
 
-    void remove(size_t num) {
-        auto node = node_n(num);
-        remove(node);
-    }
 
     void remove(node<T>* node) {
 
@@ -192,39 +206,8 @@ public:
             size--;
         }
     }
-    node<T>* node_n(size_t num) {
-
-        if ((num<0) || (num>=size)) {
-            cout << "error" << endl;
-        }
-        auto node = head;
-        for (int i=0; i<num; i++) {
-            node = node->next;
-        }
-        return node;
-    }
-
-
-    reference operator[](size_t num)
-    {
-        auto node = node_n(num);
-        return node->value;
-    }
-
-    reference get_value(size_t num) {
-        auto node = node_n(num);
-        return node->value;
-    }
-
     reference get_value(node<T>* node) {
         return node->value;
-    }
-
-
-    std::string get_key(size_t num)
-    {
-        auto node = node_n(num);
-        return node->key;
     }
 
     std::string get_key(node<T>* node) {
@@ -234,16 +217,6 @@ public:
 
     void remove_tail() {
         remove(tail);
-    }
-    void print() {
-
-        auto it = head;
-        while (it != nullptr) {
-            std::cout << "[" << it->value << ", " << it->key <<"], ";
-            it = it->next;
-        }
-        std::cout << std::endl;
-
     }
 };
 
