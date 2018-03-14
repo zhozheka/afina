@@ -51,43 +51,25 @@ public:
         }
     }
 
-    void print(const std::string &value) {
-        auto it = head;
-        int n = 0;
-        cout << "------------" << value << "------------" << endl;
-        cout << "head = " << head << endl;
-        cout << "tail = " << tail << endl;
-
-        while(it != nullptr) {
-            cout << endl << "node " << n << "-------" << endl;
-            cout << "   prev = " << it->prev << endl;
-            cout << "   key = " << it->key << endl;
-            cout << "   value = " << it->value << endl;
-            cout << "   next = " << it->next << endl;
-            it = it->next;
-            n++;
-        }
-    }
-
-
-    // void push_front(const T value) {
+    // void print(const std::string &value) {
+    //     auto it = head;
+    //     int n = 0;
+    //     cout << "------------" << value << "------------" << endl;
+    //     cout << "head = " << head << endl;
+    //     cout << "tail = " << tail << endl;
     //
-    //     node<T>* new_node = new node<T>;
-    //
-    //     new_node->value = value;
-    //     new_node->next = head;
-    //     new_node->prev = nullptr;
-    //
-    //     if (size == 0) {
-    //         tail = new_node;
-    //         head = new_node;
+    //     while(it != nullptr) {
+    //         cout << endl << "node " << n << "-------" << endl;
+    //         cout << "   prev = " << it->prev << endl;
+    //         cout << "   key = " << it->key << endl;
+    //         cout << "   value = " << it->value << endl;
+    //         cout << "   next = " << it->next << endl;
+    //         it = it->next;
+    //         n++;
     //     }
-    //     else {
-    //         head->prev = new_node;
-    //     }
-    //     head = new_node;
-    //     size++;
     // }
+
+
     void push_front(const T value) {
         node<T>* new_node = new node<T>;
 
@@ -129,19 +111,6 @@ public:
     }
 
 
-    //
-    // void make_head (node<T>* node) {
-    //
-    //     node->prev->next = node->next;
-    //     if (node != tail)
-    //     {
-    //         node->next->prev = node->prev;
-    //     }
-    //
-    //     node->prev = nullptr;
-    //     node->next = head;
-    //     head = node;
-    // }
 
     void make_head (node<T>* node) {
 
@@ -214,10 +183,6 @@ public:
         return node->key;
     }
 
-
-    void remove_tail() {
-        remove(tail);
-    }
 };
 
 #endif //LIST_LRU_CPP

@@ -43,6 +43,8 @@ public:
     bool DeleteTail();
 
 
+
+private:
     using value_type = std::string;
 
     mutable list_lru<value_type> _values_list; //pair of key and value
@@ -51,9 +53,8 @@ public:
     node<std::string>*,
     std::hash<std::string>,
     std::equal_to<std::string>>;
+
     mutable backend_wrapper _backend;
-    
-private:
 
 
     size_t _max_size;
