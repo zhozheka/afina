@@ -29,7 +29,9 @@ public:
      * @param parsed output parameter tells how many bytes was consumed from the string
      * @return true if command has been parsed out
      */
-    bool Parse(const std::string &input, size_t &parsed) { return Parse(&input[0], input.size(), parsed); }
+    bool Parse(const std::string &input, size_t &parsed) {
+        return Parse(&input[0], input.size(), parsed);
+    }
 
     /**
      * Push given string into parser input. Method returns true if it was a command parsed out

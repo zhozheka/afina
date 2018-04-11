@@ -17,6 +17,8 @@ namespace Protocol {
 
 // See Parse.h
 bool Parser::Parse(const char *input, const size_t size, size_t &parsed) {
+    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
+
     size_t pos;
     parsed = 0;
 
@@ -151,7 +153,9 @@ bool Parser::Parse(const char *input, const size_t size, size_t &parsed) {
             break;
         }
 
+
         default:
+            std::cout << "name =" << name << std::endl;
             throw std::runtime_error("Unknown state");
         }
     }
@@ -162,6 +166,9 @@ bool Parser::Parse(const char *input, const size_t size, size_t &parsed) {
 
 // See Parse.h
 std::unique_ptr<Execute::Command> Parser::Build(uint32_t &body_size) const {
+    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
+
+
     if (state != State::sLF) {
         return std::unique_ptr<Execute::Command>(nullptr);
     }
@@ -184,6 +191,8 @@ std::unique_ptr<Execute::Command> Parser::Build(uint32_t &body_size) const {
 
 // See Parse.h
 void Parser::Reset() {
+    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
+
     state = State::sName;
     name.clear();
     keys.clear();
