@@ -196,7 +196,7 @@ void ServerImpl::RunAcceptor() {
             if (connections.size() < max_workers) {
             //if (n_connections < max_workers) {
                 pthread_t worker;
-                auto args = std::make_pair(this, client_socket);
+                auto args = std::make_pair(this, client_socket); //создать в куче
 
 
                 // if(!executor.Execute(ServerImpl::RunConnectionProxy, &args)){

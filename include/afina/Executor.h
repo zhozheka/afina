@@ -21,7 +21,7 @@ namespace Afina {
 class Executor;
 
 bool initiate_thread(Executor *executor, void *(*function)(void *), bool use_lock);
-void* perform(void *executor_void);
+void * perform(void *executor_void);
 void delete_self(Executor *executor);
 
 /**
