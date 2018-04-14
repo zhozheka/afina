@@ -140,7 +140,7 @@ private:
         std::cout << "executor debug: " << __PRETTY_FUNCTION__ << std::endl;
 
         auto executor = reinterpret_cast<Executor *>(p);
-        auto last_exec_time = std::chrono::system_clock::now();
+        auto last_task = std::chrono::system_clock::now();
         while (1) {
             std::function<void()> task;
 
@@ -151,10 +151,10 @@ private:
                     executor->empty_threads++;
                     executor->empty_condition.wait_for(lock, executor->idle_time);
                     executor->empty_threads--;
-                    auto idle_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_exec_time);
+                    auto idle_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - last_task);
 
-                    if ((idle_time >= executor->idle_time && executor->threads.size() > executor->low_watermark ||
-                        executor->state == Executor::State::kStopping) && executor->tasks.empty()) {
+                    if (((idle_time >= executor->idle_time && executor->threads.size() > executor->low_watermark ) ||
+                    (executor->state == Executor::State::kStopping) && executor->tasks.empty())) {
 
                         executor->threads.erase(pthread_self());
                         executor->finish_condition.notify_one();
@@ -168,7 +168,7 @@ private:
             cout << "----------------------start executing task()" << endl;
             task();
             cout << "----------------------finish executing task()" << endl;
-            last_exec_time = std::chrono::system_clock::now();
+            last_task = std::chrono::system_clock::now();
         }
 
     }
