@@ -32,7 +32,6 @@ void *ServerImpl::RunAcceptorProxy(void *p) {
         srv->RunAcceptor();
     } catch (std::runtime_error &ex) {
         std::cerr << "Server fails: " << ex.what() << std::endl;
-        cout << "azaza";
     }
     return 0;
 }
@@ -86,12 +85,11 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
     // since there will only be one server thread, and the program's main thread (the
     // one running main()) could fulfill this purpose.
 
-    //executor.Start();
     running.store(true);
-    if (pthread_create(&accept_thread, NULL, ServerImpl::RunAcceptorProxy, this) < 0) {
-        throw std::runtime_error("Could not create server thread");
-    }
-    //executor.Execute(ServerImpl::RunAcceptorProxy, this);
+    // if (pthread_create(&accept_thread, NULL, ServerImpl::RunAcceptorProxy, this) < 0) {
+    //     throw std::runtime_error("Could not create server thread");
+    // }
+    executor.Execute(ServerImpl::RunAcceptorProxy, this);
 
 }
 
@@ -106,7 +104,7 @@ void ServerImpl::Stop() {
 // See Server.h
 void ServerImpl::Join() {
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    //pthread_join(accept_thread, 0);
+    pthread_join(accept_thread, 0);
     executor.Join();
 }
 
@@ -192,32 +190,41 @@ void ServerImpl::RunAcceptor() {
 
         {
             std::lock_guard<std::mutex> lock(connections_mutex);
-            cout << "connections.size() " << connections.size() << "max_workers " << max_workers << endl;
-            if (connections.size() < max_workers) {
-            //if (n_connections < max_workers) {
-                pthread_t worker;
-                auto args = std::make_pair(this, client_socket); //создать в куче
+            auto args = std::make_pair(this, client_socket); //создать в куче
 
-
-                // if(!executor.Execute(ServerImpl::RunConnectionProxy, &args)){
-                //     close(server_socket);
-                //     close(client_socket);
-                //     throw std::runtime_error("Could not create connection thread");
-                // }
-
-                if (pthread_create(&worker, NULL, ServerImpl::RunConnectionProxy, &args) != 0) {
-                    throw std::runtime_error("Thread create() failed");
-                }
-
-                connections.insert(worker);
-
-            } else {
-                std:string out = "To many workers!\r\n";
-                cout << out;
-                send(client_socket, out.data(), out.size(), 0);
+            if(!executor.Execute(ServerImpl::RunConnectionProxy, &args)){
+                close(server_socket);
                 close(client_socket);
+                throw std::runtime_error("Could not create connection thread");
             }
+            else {
+                cout << "succesfully connected-------------" << endl;
+            }
+
         }
+
+        // {
+        //     std::lock_guard<std::mutex> lock(connections_mutex);
+        //     cout << "connections.size() " << connections.size() << "max_workers " << max_workers << endl;
+        //     if (connections.size() < max_workers) {
+        //         pthread_t worker;
+        //         auto args = std::make_pair(this, client_socket); //создать в куче
+        //
+        //
+        //
+        //         if (pthread_create(&worker, NULL, ServerImpl::RunConnectionProxy, &args) != 0) {
+        //             throw std::runtime_error("Thread create() failed");
+        //         }
+        //
+        //         connections.insert(worker);
+        //
+        //     } else {
+        //         std:string out = "To many workers!\r\n";
+        //         cout << out;
+        //         send(client_socket, out.data(), out.size(), 0);
+        //         close(client_socket);
+        //     }
+        // }
     }
 
     // Cleanup on exit...
@@ -240,7 +247,7 @@ void *ServerImpl::RunConnectionProxy(void* p) {
         send(client_socket,  out.data(),  out.size(), 0);
     }
     close(client_socket);
-    srv->connections.erase(pthread_self());
+    //srv->connections.erase(pthread_self());
 
     cout << "connection on " << client_socket << " was closed" << endl;
     //n_connections--;
