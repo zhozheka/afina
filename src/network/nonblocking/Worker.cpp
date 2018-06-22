@@ -80,7 +80,7 @@ void* Worker::OnRun(void *args) {
         int efd = epoll_create(0xCAFE);
         int infd = -1;
         std::cout << "Worker initialized at descriptor " << efd << std::endl;
-        std::map<int,newConn> fd_conns;
+        std::map<int,addConnection> fd_conns;
         if (efd == -1) {
             throw std::runtime_error("epoll_create");
         }
@@ -131,7 +131,7 @@ void* Worker::OnRun(void *args) {
                         if (infd < 0){ // All new connections acquired
                             break;
                         }
-                        fd_conns[infd] = newConn(pStorage, infd);
+                        fd_conns[infd] = addConnection(pStorage, infd);
                     }
                     continue;
 
@@ -157,7 +157,7 @@ void* Worker::OnRun(void *args) {
         std::cout << "There are "<< fd_conns.size() <<" connections to be closed" << std::endl;
         for (auto &conn : fd_conns){
             std::cout << "Closing conn on fd " << conn.first << std::endl;
-            conn.second.cState = newConn::State::kStopping;
+            conn.second.cState = addConnection::State::kStopping;
             conn.second.routine();
             fd_conns.erase(conn.first);
         }

@@ -77,7 +77,7 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
     std::cout << "Before start socket is " << server_socket << "\n";
     *running = true;
     for (int i = 0; i < n_workers; i++) {
-        workers.emplace_back(pStorage,running);
+        workers.emplace_back(pStorage, running);
         workers.back().Start(server_socket);
     }
 }

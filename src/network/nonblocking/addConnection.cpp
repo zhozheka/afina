@@ -9,18 +9,18 @@
 namespace Afina {
 namespace Network {
 namespace NonBlocking {
-    newConn::newConn(std::shared_ptr<Afina::Storage> ps, int sock): pStorage(ps), socket(sock) {
+    addConnection::addConnection(std::shared_ptr<Afina::Storage> ps, int sock): pStorage(ps), socket(sock) {
         parser = Protocol::Parser();
         is_parsed = false;
         cState = State::kRun;
         std::cout << "Init pStorage for connection at ptr " << ps.get() << std::endl;
     }
-    newConn::newConn() {
+    addConnection::addConnection() {
         std::cout << "Used default constructor\n";
     }
-    newConn::~newConn(){}
+    addConnection::~addConnection(){}
 
-    void newConn::routine() {
+    void addConnection::routine() {
         //std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
         auto buf_size = 1024;
         char buffer[buf_size];
