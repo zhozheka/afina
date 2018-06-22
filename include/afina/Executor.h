@@ -49,6 +49,8 @@ public:
         while (threads.size() < low_watermark) {
             pthread_t thr;
             pthread_create(&thr, NULL, perform, this);
+            pthread_detach(thr);
+
             threads.insert(thr);
         }
     }
@@ -112,6 +114,7 @@ public:
 
                 pthread_t thr;
                 pthread_create(&thr, NULL, perform, this);
+                pthread_detach(thr);
                 threads.insert(thr);
 
             } else if (tasks.size() == max_queue_size) {
@@ -141,8 +144,9 @@ private:
 
         auto executor = reinterpret_cast<Executor *>(p);
         auto last_task = std::chrono::system_clock::now();
+        std::function<void()> task;
+
         while (1) {
-            std::function<void()> task;
 
             {
                 std::unique_lock<std::mutex> lock(executor->mutex);
@@ -162,7 +166,8 @@ private:
                     }
                 }
 
-                task = std::move(executor->tasks.front());
+                //task = std::move(executor->tasks.front());
+                task = executor->tasks.front();
                 executor->tasks.pop_front();
             }
             cout << "----------------------start executing task()" << endl;

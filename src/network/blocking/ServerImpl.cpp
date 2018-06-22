@@ -180,17 +180,21 @@ void ServerImpl::RunAcceptor() {
         }
 
 
-        std::string msg = "connected!\n";
-        if (send(client_socket, msg.data(), msg.size(), 0) <= 0) {
-            close(client_socket);
-            close(server_socket);
-            throw std::runtime_error("Socket send() failed");
-        }
+        // std::string msg = "connected!\n";
+        // if (send(client_socket, msg.data(), msg.size(), 0) <= 0) {
+        //     close(client_socket);
+        //     close(server_socket);
+        //     throw std::runtime_error("Socket send() failed");
+        // }
 
 
         {
             std::lock_guard<std::mutex> lock(connections_mutex);
-            auto args = std::make_pair(this, client_socket); //создать в куче
+
+            auto args = std::make_pair(this, client_socket);
+            //auto args = new std::pair<ServerImpl*,int>(this, client_socket);
+
+
 
             if(!executor.Execute(ServerImpl::RunConnectionProxy, &args)){
                 close(server_socket);

@@ -24,7 +24,9 @@ namespace Network {
 namespace NonBlocking {
 
 // See Server.h
-ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps) : Server(ps) {}
+ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps) : Server(ps) {
+        running = std::make_shared<bool>();
+    }
 
 // See Server.h
 ServerImpl::~ServerImpl() {}
@@ -32,7 +34,7 @@ ServerImpl::~ServerImpl() {}
 // See Server.h
 void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-
+    std::cout << "Starting nonblocking server on port " << port << " with " << n_workers << " workers\n";
     // If a client closes a connection, this will generally produce a SIGPIPE
     // signal that will kill the process. We want to ignore this signal, so send()
     // just returns -1 when this happens.
@@ -54,9 +56,10 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
     if (server_socket == -1) {
         throw std::runtime_error("Failed to open socket");
     }
+    std::cout << "Server socket is " << server_socket << "\n";
 
     int opts = 1;
-    if (setsockopt(server_socket, SOL_SOCKET, 0, &opts, sizeof(opts)) == -1) {
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opts, sizeof(opts)) == -1) {
         close(server_socket);
         throw std::runtime_error("Socket setsockopt() failed");
     }
@@ -71,9 +74,10 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
         close(server_socket);
         throw std::runtime_error("Socket listen() failed");
     }
-
+    std::cout << "Before start socket is " << server_socket << "\n";
+    *running = true;
     for (int i = 0; i < n_workers; i++) {
-        workers.emplace_back(pStorage);
+        workers.emplace_back(pStorage,running);
         workers.back().Start(server_socket);
     }
 }
@@ -81,6 +85,7 @@ void ServerImpl::Start(uint16_t port, uint16_t n_workers) {
 // See Server.h
 void ServerImpl::Stop() {
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
+    *running = false;
     for (auto &worker : workers) {
         worker.Stop();
     }

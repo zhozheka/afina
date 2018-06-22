@@ -35,7 +35,7 @@ private:
     // inside of accept_thread
     // Read-only
     uint32_t listen_port;
-
+    std::shared_ptr<bool> running;
     // Thread that is accepting new connections
     std::vector<Worker> workers;
 };

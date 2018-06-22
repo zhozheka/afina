@@ -8,6 +8,7 @@ set(SOURCE_FILES
     nonblocking/ServerImpl.cpp
     nonblocking/Worker.cpp
     nonblocking/Utils.cpp
+    nonblocking/addConnection.cpp
 )
 
 add_library(Network ${SOURCE_FILES})
