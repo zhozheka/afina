@@ -52,7 +52,7 @@ namespace NonBlocking {
                     return;
                 }
                 return;
-            }else{
+            } else{
                 close(socket);
                 throw std::runtime_error("User irrespectively disconnected");
             }
@@ -78,10 +78,8 @@ namespace NonBlocking {
                 memset(buffer + body_read, 0, parsed); // Убираем все, что было связано с командой.
                 curr_pos = body_read;
 
-                //Сбор команды и аргументов
                 auto cmd = parser.Build(body_size);
 
-                // Проверка на возможность дочитать команду. Если дочитали - то собрать и отправить результат.
                 if (body_size <= curr_pos) {
                     char args[body_size + 1];
                     memcpy(args, buffer, body_size);
@@ -92,9 +90,9 @@ namespace NonBlocking {
                         curr_pos -= body_size + 2;
                     }
                     try {
-                        cmd->Execute(*(pStorage.get()), args, out); // Должно передаваться без копирования
+                        cmd->Execute(*(pStorage.get()), args, out);
                         out += "\r\n";
-                    } catch (std::runtime_error &err) { // Ошибка внутри поймается и отправится клиенту
+                    } catch (std::runtime_error &err) { 
                         out = std::string("SERVER_ERROR : ") + err.what() + "\r\n";
                     }
                     if (send(socket, out.data(), out.size(), 0) <= 0) {
