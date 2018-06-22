@@ -73,9 +73,9 @@ namespace NonBlocking {
             }
             //is_parsed = parser.Parse(buffer, curr_pos, parsed);
             if (is_parsed) {
-                size_t body_read = curr_pos - parsed;//body_read - сколько дочитали
+                size_t body_read = curr_pos - parsed;
                 memcpy(buffer, buffer + parsed, body_read);
-                memset(buffer + body_read, 0, parsed); // Убираем все, что было связано с командой.
+                memset(buffer + body_read, 0, parsed);
                 curr_pos = body_read;
 
                 auto cmd = parser.Build(body_size);
@@ -92,7 +92,7 @@ namespace NonBlocking {
                     try {
                         cmd->Execute(*(pStorage.get()), args, out);
                         out += "\r\n";
-                    } catch (std::runtime_error &err) { 
+                    } catch (std::runtime_error &err) {
                         out = std::string("SERVER_ERROR : ") + err.what() + "\r\n";
                     }
                     if (send(socket, out.data(), out.size(), 0) <= 0) {
