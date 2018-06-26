@@ -42,7 +42,7 @@ private:
     /**
      * Where coroutines stack begins
      */
-    char *StackBottom;
+     char *StackBottom;
 
     /**const int&
      * Current coroutine
@@ -88,6 +88,7 @@ public:
      * Also there are no guarantee what coroutine will get execution, it could be caller of the current one or
      * any other which is ready to run
      */
+
     void yield();
 
     /**

@@ -18,7 +18,7 @@ namespace NonBlocking {
     addConnection::addConnection() {
         std::cout << "Used default constructor\n";
     }
-    addConnection::~addConnection(){}
+    addConnection::~addConnection() {}
 
     void addConnection::routine() {
         //std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;

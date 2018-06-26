@@ -8,37 +8,33 @@
 namespace Afina {
 namespace Coroutine {
     void Engine::Store(context &ctx) {
-        char stack;
-        ctx.Low = StackBottom;
         ctx.High = StackBottom;
-        if (ctx.Low > &stack){
-            ctx.Low = &stack;
-        }
-        else {
-            ctx.High = &stack;
-        }
+        char stack;
+        ctx.Low = &stack;
+
         uint32_t new_stack_size = ctx.High - ctx.Low;
-
         char* old_stack;
-        uint32_t old_stack_size;
-        std::tie(old_stack, old_stack_size) = ctx.Stack;
+        uint32_t stack_capacity;
+        std::tie(old_stack, stack_capacity) = ctx.Stack;
 
 
-        if (new_stack_size > old_stack_size) {
+        if (new_stack_size > stack_capacity) {
+            // allocate new memory for stack
             delete[] old_stack;
 
             char* new_stack = new char[new_stack_size];
-            ctx.Stack = std::make_tuple(new_stack, new_stack_size);
             memcpy(new_stack, ctx.Low, new_stack_size);
-        } else {
-            memcpy(old_stack, ctx.Low, old_stack_size);
-        }
 
+            ctx.Stack = std::make_tuple(new_stack, new_stack_size);
+        } else {
+            // don't allocate new memory new_stack_size < stack_capacity
+            memcpy(old_stack, ctx.Low, new_stack_size);
+        }
     }
 
     void Engine::Restore(context &ctx) {
         char stack;
-        if ((&stack >= ctx.Low) && (&stack <= ctx.High)){
+        if (&stack >= ctx.Low){
             Engine::Restore(ctx);
         }
 
@@ -54,19 +50,19 @@ namespace Coroutine {
     void Engine::yield() {
         context* routine = alive;
 
-        if (routine == cur_routine && routine) {
+        if ((routine == cur_routine) && routine) {
             routine = routine->next;
         }
 
-        if (routine) {
-            sched(routine);
-        } else {
+        if (routine == nullptr) {
             return;
         }
+        sched(routine);
+
     }
 
-    void Engine::sched(void *routine_) {
-        context* ctx = reinterpret_cast<context*>(routine_);
+    void Engine::sched(void *routine) {
+        context* ctx = reinterpret_cast<context*>(routine);
         if (cur_routine) {
             if (setjmp(cur_routine->Environment)) {
                 return;

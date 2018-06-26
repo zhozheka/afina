@@ -73,98 +73,101 @@ void Worker::Join() {
 
 // See Worker.h
 void* Worker::OnRun(void *args) {
-        std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-        struct epoll_event ev;
-        struct epoll_event events[MAXEVENTS];
-        int res, events_catched;
-        int efd = epoll_create(0xCAFE);
-        int infd = -1;
-        std::cout << "Worker initialized at descriptor " << efd << std::endl;
-        std::map<int,addConnection> fd_conns;
-        if (efd == -1) {
-            throw std::runtime_error("epoll_create");
-        }
-        socket = *reinterpret_cast<int*>(args);
-        ev.data.fd = socket;
-        ev.events = EPOLLEXCLUSIVE | EPOLLIN | EPOLLHUP | EPOLLERR;
-        res = epoll_ctl(efd, EPOLL_CTL_ADD, ev.data.fd, &ev);
-        if (res == -1) {
-            throw std::runtime_error("epoll ctl");
-        }
-        std::cout << "Connected epoll " << efd <<  " to server socket " << socket << std::endl;
-        long counter = 0;
+    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
+    socket = *reinterpret_cast<int*>(args);
 
+    struct epoll_event ev;
+    struct epoll_event events[MAXEVENTS];
 
-
-        while(*running) {
-            //sleep(1);
-            //std::cerr << "THERE WERE " << counter << " READS ON EPOLL " << efd << std::endl;
-            //std::cout << "In OnRun infinity loop pStorage is " << pStorage.get() << " efd " << efd << " socket " << socket << std::endl;
-            if ((events_catched = epoll_wait(efd, events, MAXEVENTS, -1)) == -1) {
-                if(errno == EINTR)
-                {
-                    continue;
-                }
-                throw std::runtime_error("epoll wait");
-            }
-            //std::cout << "SOME EVENTS CATCHED: "<< events_catched <<"\n";
-            for (int i = 0; i < events_catched; i++) {
-                if ((events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP) ||
-                        (!(events[i].events & EPOLLIN) && !(events[i].events & EPOLLOUT))) {
-                    /* An error has occured on this fd, or the socket is not
-                       ready for reading (why were we notified then?) */
-                    std::cout << "User on socket " << events[i].data.fd << " disconnected\n";
-                    fd_conns.erase(events[i].data.fd); // Clear connection.
-                    fprintf(stderr, "epoll error\n");
-                    close(events[i].data.fd);
-                    continue;
-
-                } else if (socket == events[i].data.fd) {
-                    /* We have a notification on the listening socket, which
-                       means one or more incoming connections. */
-                    while (1) {
-                        try {
-                            infd = AcquireConn(efd, socket);
-                        } catch(std::runtime_error &err){
-                            std::cout << "Error: " << err.what() << std::endl;
-                        }
-                        if (infd < 0){ // All new connections acquired
-                            break;
-                        }
-                        fd_conns[infd] = addConnection(pStorage, infd);
-                    }
-                    continue;
-
-
-
-                } else { // We've got some new data. Process it, bitch!
-                    try {
-                        fd_conns[events[i].data.fd].routine();
-                    }catch (std::runtime_error &err){
-                        std::cout << err.what() << "- error on fd " << events[i].data.fd << std::endl;
-                        continue;
-                    }
-                    //counter++;
-                    continue;
-                    //close(events[i].data.fd);
-                }
-
-            }
-        }
-        // Server is stopping. We should proceed the last data, send users message about stopping and then close all connections
-        //std::cerr << "STOPPING: THERE WERE " << counter << " READS ON EPOLL " << efd << std::endl;
-        std::cout << "In OnRun infinity loop pStorage is " << pStorage.get() << " efd " << efd << " socket " << socket << std::endl;
-        std::cout << "There are "<< fd_conns.size() <<" connections to be closed" << std::endl;
-        for (auto &conn : fd_conns){
-            std::cout << "Closing conn on fd " << conn.first << std::endl;
-            conn.second.cState = addConnection::State::kStopping;
-            conn.second.routine();
-            fd_conns.erase(conn.first);
-        }
-
+    int res, events_catched;
+    int efd = epoll_create(1);
+    if (efd == -1) {
+        throw std::runtime_error("epoll_create");
     }
 
-int Worker::AcquireConn(int efd, int socket){
+    int infd = -1;
+    std::cout << "Worker initialized at descriptor " << efd << std::endl;
+    std::map<int, addConnection> fd_conns;
+    ev.data.fd = socket;
+    ev.events = EPOLLEXCLUSIVE | EPOLLIN | EPOLLHUP | EPOLLERR;
+
+    res = epoll_ctl(efd, EPOLL_CTL_ADD, ev.data.fd, &ev);
+    if (res == -1) {
+        throw std::runtime_error("epoll ctl");
+    }
+    std::cout << "Connected epoll " << efd <<  " to server socket " << socket << std::endl;
+    long counter = 0;
+
+
+    while(*running) {
+        //sleep(1);
+        //std::cerr << "THERE WERE " << counter << " READS ON EPOLL " << efd << std::endl;
+        //std::cout << "In OnRun infinity loop pStorage is " << pStorage.get() << " efd " << efd << " socket " << socket << std::endl;
+        int events_catched = epoll_wait(efd, events, MAXEVENTS, -1);
+        if (events_catched == -1) {
+            if(errno == EINTR) {
+                continue;
+            }
+            throw std::runtime_error("epoll wait");
+        }
+        //std::cout << "SOME EVENTS CATCHED: "<< events_catched <<"\n";
+        for (int i = 0; i < events_catched; i++) {
+            if ((events[i].events & EPOLLERR) ||
+                (events[i].events & EPOLLHUP) ||
+                (!(events[i].events & EPOLLIN) && !(events[i].events & EPOLLOUT))) {
+                /* An error has occured on this fd, or the socket is not
+                   ready for reading (why were we notified then?) */
+                std::cout << "User on socket " << events[i].data.fd << " disconnected\n";
+                fd_conns.erase(events[i].data.fd); // Clear connection.
+                fprintf(stderr, "epoll error\n");
+                close(events[i].data.fd);
+                continue;
+
+            } else if (socket == events[i].data.fd) {
+                /* We have a notification on the listening socket, which
+                   means one or more incoming connections. */
+                while (1) {
+                    try {
+                        infd = AcquireConn(efd, socket);
+                    } catch(std::runtime_error &err){
+                        std::cout << "Error: " << err.what() << std::endl;
+                    }
+                    if (infd < 0){ // All new connections acquired
+                        break;
+                    }
+                    fd_conns[infd] = addConnection(pStorage, infd);
+                }
+                continue;
+
+
+            } else { // We've got some new data. Process it, bitch!
+                try {
+                    fd_conns[events[i].data.fd].routine();
+                } catch (std::runtime_error &err){
+                    std::cout << err.what() << "- error on fd " << events[i].data.fd << std::endl;
+                    continue;
+                }
+                //counter++;
+                continue;
+                //close(events[i].data.fd);
+            }
+
+        }
+    }
+    // Server is stopping. We should proceed the last data, send users message about stopping and then close all connections
+    //std::cerr << "STOPPING: THERE WERE " << counter << " READS ON EPOLL " << efd << std::endl;
+    std::cout << "In OnRun infinity loop pStorage is " << pStorage.get() << " efd " << efd << " socket " << socket << std::endl;
+    std::cout << "There are "<< fd_conns.size() <<" connections to be closed" << std::endl;
+    for (auto &conn : fd_conns){
+        std::cout << "Closing conn on fd " << conn.first << std::endl;
+        conn.second.cState = addConnection::State::kStopping;
+        conn.second.routine();
+        fd_conns.erase(conn.first);
+    }
+
+}
+
+int Worker::AcquireConn(int efd, int socket) {
     struct sockaddr in_addr;
     socklen_t in_len;
     int infd;
@@ -194,7 +197,9 @@ int Worker::AcquireConn(int efd, int socket){
        list of fds to monitor. */
     make_socket_non_blocking(infd);
     if (s == -1)
+    {
         abort();
+    }
     struct epoll_event ev;
     ev.data.fd = infd;
     //ev.events = EPOLLIN | EPOLLET;
