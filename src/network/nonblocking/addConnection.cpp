@@ -32,18 +32,16 @@ namespace NonBlocking {
 
 
         n_read = recv(socket, buffer + curr_pos, buf_size - curr_pos, 0);
+
         if (n_read == 0) {
             close(socket);
-            throw std::runtime_error("User respectively disconnected");
+            throw std::runtime_error("Client disconnected");
         } else if (n_read == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK){ // In data ended.
                 if (cState == State::kStopping){
                     // shut down server
-                    if (send(socket, out.data(), out.size(), 0) <= 0) {
-                        throw std::runtime_error("Socket send() failed\n");
-                    }
                     close(socket);
-                    std::cout << "Socket closed via server stop\n";
+                    std::cout << "Socket closed" << std::endl;
                     return;
                 }
                 return;
@@ -57,14 +55,10 @@ namespace NonBlocking {
         while (parsed < curr_pos) {
             try {
                 is_parsed = parser.Parse(buffer, curr_pos, parsed);
-            } catch (std::runtime_error &err) { // Ошибка внутри поймается и отправится клиенту
-                out = std::string("SERVER_ERROR : ") + err.what() + "\r\n";
-                if (send(socket, out.data(), out.size(), 0) <= 0) {
-                    throw std::runtime_error("Socket send() failed\n");
-                }
+            } catch (std::runtime_error &err) {
+                std::cout << "Parser error" << std::endl;
                 return;
             }
-            //is_parsed = parser.Parse(buffer, curr_pos, parsed);
             if (is_parsed) {
                 size_t body_read = curr_pos - parsed;
                 memcpy(buffer, buffer + parsed, body_read);
@@ -86,10 +80,8 @@ namespace NonBlocking {
                         cmd->Execute(*(pStorage.get()), args, out);
                         out += "\r\n";
                     } catch (std::runtime_error &err) {
-                        out = std::string("SERVER_ERROR : ") + err.what() + "\r\n";
-                    }
-                    if (send(socket, out.data(), out.size(), 0) <= 0) {
-                        throw std::runtime_error("Socket send() failed\n");
+                        //out = std::string("SERVER_ERROR : ") + err.what() + "\r\n";
+                        std::cout << "Can't execute: " << err.what() << std::endl;
                     }
                     parser.Reset();
                     is_parsed = false;
@@ -100,7 +92,7 @@ namespace NonBlocking {
 
         }
         if (cState == State::kStopping){
-            std::cout << "Closing connection via server stop\n";
+            std::cout << "Stopping server" << std::endl;
             close(socket);
         }
     }
