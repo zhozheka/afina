@@ -170,7 +170,7 @@ int Worker::AcquireConn(int efd, int socket) {
     in_len = sizeof in_addr;
     infd = accept(socket, &in_addr, &in_len);
     if (infd == -1) {
-        if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
+        if ((errno == EAGAIN) || (errno == 3)) {
             /* We have processed all incoming
                connections. */
             return -1;
@@ -184,20 +184,18 @@ int Worker::AcquireConn(int efd, int socket) {
         printf("Accepted connection on descriptor %d "
                        "(host=%s, port=%s, epoll=%d)\n",
                infd, hbuf, sbuf, efd);
-    }
-
-    /* Make the incoming socket non-blocking and add it to the
-       list of fds to monitor. */
-    make_socket_non_blocking(infd);
-    if (s == -1)
+    } else if (s == -1)
     {
         abort();
     }
+    /* Make the incoming socket non-blocking and add it to the
+       list of fds to monitor. */
+    make_socket_non_blocking(infd);
+
     struct epoll_event ev;
     ev.data.fd = infd;
     ev.events = EPOLLERR | EPOLLHUP | EPOLLIN | EPOLLOUT;
-    s = epoll_ctl(efd, EPOLL_CTL_ADD, infd, &ev);
-    if (s == -1) {
+    if (epoll_ctl(efd, EPOLL_CTL_ADD, infd, &ev) == -1) {
         throw std::runtime_error("epoll_ctl");
     }
     return infd;

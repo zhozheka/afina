@@ -80,11 +80,14 @@ namespace NonBlocking {
                         cmd->Execute(*(pStorage.get()), args, out);
                         out += "\r\n";
                     } catch (std::runtime_error &err) {
-                        //out = std::string("SERVER_ERROR : ") + err.what() + "\r\n";
-                        std::cout << "Can't execute: " << err.what() << std::endl;
+                        out = std::string("SERVER_ERROR : ") + err.what() + "\r\n";
+                    }
+                    if (send(socket, out.data(), out.size(), 0) <= 0) {
+                        throw std::runtime_error("Socket send() failed\n");
                     }
                     parser.Reset();
                     is_parsed = false;
+                    //std::cout << "PARSED: "<< parsed << "CURR_POS: " << curr_pos << std::endl;
                     parsed = 0;
                 }
             }

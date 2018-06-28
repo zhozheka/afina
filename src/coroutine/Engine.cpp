@@ -34,9 +34,9 @@ namespace Coroutine {
 
     void Engine::Restore(context &ctx) {
         char stack;
-        if (&stack >= ctx.Low){
-            Engine::Restore(ctx);
-        }
+        // if (&stack >= ctx.Low){
+        //     Engine::Restore(ctx);
+        // }
 
         char* ctx_stack;
         uint32_t ctx_stack_size;
