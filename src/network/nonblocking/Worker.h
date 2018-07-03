@@ -3,7 +3,6 @@
 
 #include <memory>
 #include <pthread.h>
-#include <atomic>
 
 namespace Afina {
 
@@ -14,10 +13,10 @@ namespace Network {
 namespace NonBlocking {
 
 /**
- * # Thread running epoll
- * On Start spaws background thread that is doing epoll on the given server
- * socket and process incoming connections and its data
- */
+* # Thread running epoll
+* On Start spaws background thread that is doing epoll on the given server
+* socket and process incoming connections and its data
+*/
 class Worker {
 public:
     Worker(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<bool> run);
@@ -44,7 +43,7 @@ public:
      */
     void Join();
     static void *OnRunProxy(void*);
-    static int AcquireConn(int,int);
+    static int HandleConnection(int,int);
 
 protected:
     /**
@@ -53,11 +52,11 @@ protected:
     void* OnRun(void *args);
 
 private:
-    std::shared_ptr<Afina::Storage> pStorage;
     pthread_t thread;
+    //Storage from ServerImpl initialization
+    std::shared_ptr<Afina::Storage> pStorage;
+    //Running flag for correctly stopping
     std::shared_ptr<bool> running;
-    //std::atomic<bool> test_variable;
-    int socket;
 };
 
 } // namespace NonBlocking

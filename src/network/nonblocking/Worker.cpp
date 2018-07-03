@@ -12,35 +12,22 @@
 #include <protocol/Parser.h>
 #include <afina/execute/Command.h>
 #include <map>
-#include "addConnection.h"
+#include "Connection.cpp"
 
 #include "Utils.h"
-#define MAXEVENTS 100
-#define EPOLLEXCLUSIVE 1 << 28
+#define MAX_EPOLL_EVVENTS 10
+#define EPOLLEXCLUSIVE 1<<28
 namespace Afina {
 namespace Network {
 namespace NonBlocking {
 
 // See Worker.h
 Worker::Worker(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<bool> run): pStorage(ps) {
-        running = std::move(run);
-        std::cout << "Init pStorage in Worker at ptr " << ps.get() << std::endl;
+    running = std::move(run);
 }
 
 // See Worker.h
 Worker::~Worker() {
-}
-// See Worker.h
-void Worker::Start(int server_socket) {
-    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    //running.store(true);
-    socket = server_socket;
-    std::cout << "In start socket is " << socket << " pStorage is " << pStorage.get() << "\n";
-    auto data = new std::pair<Worker,int>(*this, socket);
-    if (pthread_create(&thread, NULL, OnRunProxy, data) < 0) {
-        throw std::runtime_error("Could not create server thread");
-    }
-    //std::cout << "New worker at serv_sock_descriptor " << data->second << std::endl;
 }
 
 // See Worker.h
@@ -55,14 +42,20 @@ void Worker::Join() {
     pthread_join(thread, nullptr);
 }
 
-void *Worker::OnRunProxy(void *p) {
+// See Worker.h
+void Worker::Start(int server_socket) {
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    //Worker *srv = reinterpret_cast<Worker *>(p);
-    auto data = reinterpret_cast<std::pair<Worker,int>*>(p); // worker and socket
+    auto data = new std::pair<Worker,int>(*this, server_socket);
+    if (pthread_create(&thread, NULL, OnRunProxy, data) < 0) {
+        throw std::runtime_error("Start new thread failed Worker::Start method");
+    }
+}
+//OnRun Proxy function
+void *Worker::OnRunProxy(void *p) {
+    auto data = reinterpret_cast<std::pair<Worker,int>*>(p);
     try {
-        if (data->first.pStorage.get() == nullptr) {
-            std::cerr << "In onrunproxy server socket is " << data->second << " pStorage is "
-                      << data->first.pStorage.get() << "\n";
+        if (data->first.pStorage.get()== nullptr ) {
+            std::cerr << "Errror in onrunproxy. Nullptr has been obtained.";
         }
         data->first.OnRun(&data->second);
     } catch (std::runtime_error &ex) {
@@ -74,131 +67,108 @@ void *Worker::OnRunProxy(void *p) {
 // See Worker.h
 void* Worker::OnRun(void *args) {
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    socket = *reinterpret_cast<int*>(args);
-
-    // 1. Create epoll_context here
     struct epoll_event ev;
-    struct epoll_event events[MAXEVENTS];
-
-
-    int efd = epoll_create(42);
-    if (efd == -1) {
-        throw std::runtime_error("epoll_create");
-    }
+    struct epoll_event events[MAX_EPOLL_EVVENTS];
     int events_catched;
-
-    int infd = -1;
-    std::cout << "Worker initialized at descriptor " << efd << std::endl;
-    std::map<int, addConnection> fd_conns;
-
-    // 2. Add server_socket to context
+    //Descriptor was returned
+    int epfd = epoll_create(MAX_EPOLL_EVVENTS);
+    if (epfd == -1) {
+        throw std::runtime_error("Epoll_create failed");
+    }
+    //Map with Connection and their descriptors
+    std::map<int,Connection*> fd_connections;
+    int socket = *reinterpret_cast<int*>(args);
     ev.data.fd = socket;
     ev.events = EPOLLEXCLUSIVE | EPOLLIN | EPOLLHUP | EPOLLERR;
-
-    if (epoll_ctl(efd, EPOLL_CTL_ADD, ev.data.fd, &ev) == -1) {
-        throw std::runtime_error("epoll ctl");
+    //Register it
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, ev.data.fd, &ev) == -1) {
+        throw std::runtime_error("Epoll_ctl failed");
     }
-    std::cout << "Connected epoll " << efd <<  " to server socket " << socket << std::endl;
-
-    while(*running) {
-
-        int events_catched = epoll_wait(efd, events, MAXEVENTS, -1);
-        if (events_catched == -1) {
-            if(errno == EINTR) {
-                continue; // nothing happened
+    while(*running){
+        if ((events_catched = epoll_wait(epfd, events, MAX_EPOLL_EVVENTS, -1)) == -1) {
+            if(errno == EINTR)
+            {
+                continue;
             }
-            throw std::runtime_error("epoll wait");
+            throw std::runtime_error("Epoll wait failed");
         }
-
-        for (int i=0; i<events_catched; i++) {
-            if ((events[i].events & EPOLLERR) ||
-                (events[i].events & EPOLLHUP) ||
+        //Process all events
+        for (int i = 0; i < events_catched; i++) {
+            //If fd don't available for read and write or some error occured on this fd. Clear it.
+            if ((events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP) ||
                 (!(events[i].events & EPOLLIN) && !(events[i].events & EPOLLOUT))) {
-                /* An error has occured on this fd, or the socket is not
-                   ready for reading (why were we notified then?) */
-                std::cout << "User on socket " << events[i].data.fd << " disconnected\n";
-                fd_conns.erase(events[i].data.fd); // Delete connection.
-                fprintf(stderr, "epoll error\n");
+                fd_connections.erase(events[i].data.fd);
+                std::cerr<<"Epol error\n";
                 close(events[i].data.fd);
                 continue;
-
             } else if (socket == events[i].data.fd) {
-                /* We have a notification on the listening socket, which
-                   means one or more incoming connections. */
-                while (1) {
+                //Some new incoming connection
+                int incoming_fd = -1;
+                while (true) {
                     try {
-                        infd = AcquireConn(efd, socket);
-                    } catch(std::runtime_error &err){
+                        incoming_fd = HandleConnection(epfd, socket);
+                    }catch(std::runtime_error &err){
                         std::cout << "Error: " << err.what() << std::endl;
                     }
-                    if (infd < 0){ // All new connections acquired
+                    if (incoming_fd < 0){ // All connections are handled
                         break;
                     }
-                    fd_conns[infd] = addConnection(pStorage, infd);
+                    std::cout << "New conn" << std::endl;
+                    auto conn = new Connection(pStorage, incoming_fd);
+                    fd_connections[incoming_fd] = conn;
+                    //fd_connections[incoming_fd] = Connection(pStorage, incoming_fd);
                 }
                 continue;
             } else {
-                // process new data
                 try {
-                    fd_conns[events[i].data.fd].routine();
+                    if(fd_connections[events[i].data.fd]->handler() == -1) {
+                        close(events[i].data.fd);
+                        delete fd_connections[events[i].data.fd];
+                        fd_connections.erase(events[i].data.fd);
+                    }
                 } catch (std::runtime_error &err){
-                    std::cout << err.what() << "- error on fd " << events[i].data.fd << std::endl;
                     continue;
                 }
                 continue;
             }
+
         }
     }
     // Server is stopping. We should proceed the last data, send users message about stopping and then close all connections
-    //std::cerr << "STOPPING: THERE WERE " << counter << " READS ON EPOLL " << efd << std::endl;
-    // close connections
-    for (auto &conn : fd_conns) {
-        conn.second.cState = addConnection::State::kStopping;
-        conn.second.routine();
-        fd_conns.erase(conn.first);
+    for (auto &conn : fd_connections){
+        std::cout<<"Stopping server"<<std::endl;
+        conn.second->cState = Connection::StateRun::Stopping;
+        conn.second->handler();
+        delete conn.second;
+        fd_connections.erase(conn.first);
     }
 
 }
-
-int Worker::AcquireConn(int efd, int socket) {
-
+//Subroutine for handle new connections
+int Worker::HandleConnection(int epfd, int socket){
     struct sockaddr in_addr;
     socklen_t in_len;
-    int infd;
-    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
-
+    int incoming_fd;
     in_len = sizeof in_addr;
-    infd = accept(socket, &in_addr, &in_len);
-    if (infd == -1) {
-        if ((errno == EAGAIN) || (errno == 3)) {
-            /* We have processed all incoming
-               connections. */
+    incoming_fd = accept(socket, &in_addr, &in_len);
+    if (incoming_fd == -1) {
+        if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
+            //All connections processed
             return -1;
         } else {
-            throw std::runtime_error("Accept");
+            throw std::runtime_error("can't handle Handle");
         }
     }
-
-    int s = getnameinfo(&in_addr, in_len, hbuf, sizeof hbuf, sbuf, sizeof sbuf, NI_NUMERICHOST | NI_NUMERICSERV);
-    if (s == 0) {
-        printf("Accepted connection on descriptor %d "
-                       "(host=%s, port=%s, epoll=%d)\n",
-               infd, hbuf, sbuf, efd);
-    } else if (s == -1)
-    {
-        abort();
-    }
-    /* Make the incoming socket non-blocking and add it to the
-       list of fds to monitor. */
-    make_socket_non_blocking(infd);
+    make_socket_non_blocking(incoming_fd);
 
     struct epoll_event ev;
-    ev.data.fd = infd;
+    ev.data.fd = incoming_fd;
     ev.events = EPOLLERR | EPOLLHUP | EPOLLIN | EPOLLOUT;
-    if (epoll_ctl(efd, EPOLL_CTL_ADD, infd, &ev) == -1) {
-        throw std::runtime_error("epoll_ctl");
+    //Register it
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, incoming_fd, &ev) == -1) {
+        throw std::runtime_error("Epoll_ctl error");
     }
-    return infd;
+    return incoming_fd;
 }
 
 } // namespace NonBlocking
