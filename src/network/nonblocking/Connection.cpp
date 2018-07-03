@@ -26,25 +26,16 @@ class Connection {
 public:
 
     enum class StateRun {
-        // Connection could executed
-                Run,
-
-        // Tasks are shutting down
-                Stopping
+                Run, Stopping
     };
     Connection() {
     };
     Connection(std::shared_ptr<Afina::Storage> ps, int sock): pStorage(ps), socket(sock) {
-        //Initialze parser - constructor will  be run
         parser = Protocol::Parser();
-        //Make the flag is_parsed false
         is_parsed = false;
-        //State should be swithced to Run
         cState = StateRun::Run;
     };
-    //Destructor is simple
     ~Connection(){};
-    //Handler function. Here data is processed.
     int handler() {
         bool error = false;
 
@@ -143,25 +134,19 @@ private:
     Protocol::Parser parser;
     int socket;
     bool is_parsed = false;
-    //Initialize buf_size 1024
-    //Make the array, named buffer. Size is buf_size
+
     char buffer[BUFFER_CAPACITY];
-    //Create out string. These string we send to user.
+
     std::string body;
     std::string out;
-    //How many bites are parsed.
+
     size_t parsed = 0;
-    //Current position
     size_t curr_pos = 0;
     size_t position = 0;
-    //How much data we received
-    ssize_t n_read = 0;
-    //Body size for Parser Build
     uint32_t body_size;
     size_t bytes_sent_total = 0;
     State state = State::Parsing;
     std::unique_ptr<Execute::Command> cmd;
-
 
 };
 
