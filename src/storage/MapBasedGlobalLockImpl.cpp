@@ -4,186 +4,225 @@ namespace Afina {
 namespace Backend {
 
 // See MapBasedGlobalLockImpl.h
+bool MapBasedGlobalLockImpl::Put(const std::string &key, const std::string &value)
+{
+    std::lock_guard<std::mutex> lock(_lock);
 
-
-bool MapBasedGlobalLockImpl::Put(const std::string &key, const std::string &value) {
-
-    size_t new_element_size = key.size() + value.size();
-    if (new_element_size > _max_size) {
-        //too big
-        return false;
-    }
-
-    std::lock_guard<std::mutex> lock(_m);
-
-    size_t new_value_size = value.size();
-
-    auto find_element = _backend.find(key);
-    if (find_element == _backend.end())
+    size_t needed_size = key.size() + value.size();
+    if (needed_size > _max_size)
     {
-        //element is absent
-        //return PutIfAbsent(key, value);
-
-        //clear memory for a new element by deleting least used
-        while((_current_size  + new_element_size) > _max_size) {
-            if (DeleteTail() == false) {
-                return false;
-            }
-        }
-
-        //put new element
-        _values_list.push_front(value);
-        _values_list.get_head()->key = key; //
-        _backend[_values_list.get_head()->key] = _values_list.get_head();
-        _current_size += new_element_size;
-
-        return true;
-
+        return false;
     }
-    else {
-        //if element is present
-        //return Set(key, value);
 
-        //clear space for a new
-        size_t old_value_size = find_element->second->value.size();
-        while((_current_size - old_value_size + new_value_size) > _max_size) {
-            if (DeleteTail() == false) {
-                return false;
-            }
-        }
-
-        //now set the  element
-        find_element->second->value = value;
-        _current_size = _current_size - old_value_size + new_value_size;
-
-        //make head
-        _values_list.make_head(find_element->second);
+    auto cache_elem = _backend.find(key);
+    if (cache_elem != _backend.end())
+    {
+        _cache.to_front(cache_elem->second);
+        _cache.front()->second = value;
         return true;
     }
+
+    while (needed_size > _max_size - _size)
+    {
+        auto old_key = _cache.back();
+        _size -= old_key->first.size();
+        _size -= old_key->second.size();
+        _cache.pop_back();
+        _backend.erase(old_key->first);
+    }
+    _size += needed_size;
+    _cache.push_front(key, value);
+    _backend[_cache.front()->first] = _cache.front();
+    return true;
+}
+
+// See MapBasedGlobalLockImpl.h
+bool MapBasedGlobalLockImpl::PutIfAbsent(const std::string &key, const std::string &value)
+{
+    std::lock_guard<std::mutex> lock(_lock);
+
+    const size_t needed_size = key.size() + value.size();
+    if (needed_size > _max_size)
+    {
+        return false;
+    }
+
+    if (_backend.find(key) == _backend.end())
+    {
+        while (needed_size > _max_size - _size)
+        {
+            auto old_key = _cache.back();
+            _size -= old_key->first.size();
+            _size -= old_key->second.size();
+            _cache.pop_back();
+            _backend.erase(old_key->first);
+        }
+        _size += needed_size;
+        _cache.push_front(key, value);
+        _backend[_cache.front()->first] = _cache.front();
+        return true;
+    }
+
     return false;
-
 }
 
 // See MapBasedGlobalLockImpl.h
-bool MapBasedGlobalLockImpl::PutIfAbsent(const std::string &key, const std::string &value) {
+bool MapBasedGlobalLockImpl::Set(const std::string &key, const std::string &value)
+{
+    std::lock_guard<std::mutex> lock(_lock);
 
-
-    size_t new_element_size = key.size() + value.size();
-    if (new_element_size > _max_size) {
-        //too big
+    size_t needed_size = value.size();
+    if (needed_size > _max_size)
+    {
         return false;
     }
 
-    std::lock_guard<std::mutex> lock(_m);
-
-    auto find_element = _backend.find(key);
-    if (find_element != _backend.end()) {
-        //already exists
-        return false;
-    }
-
-    //clear memory for a new element by deleting least used
-    size_t new_value_size = value.size();
-    while((_current_size  + new_element_size) > _max_size) {
-        if (DeleteTail() == false) {
-            return false;
+    auto cache_elem = _backend.find(key);
+    if (cache_elem != _backend.end())
+    {
+        _cache.to_front(cache_elem->second);
+        needed_size -= _cache.front()->second.size();
+        while (needed_size > _max_size - _size)
+        {
+            auto old_key = _cache.back();
+            _size -= old_key->first.size();
+            _size -= old_key->second.size();
+            _cache.pop_back();
+            _backend.erase(old_key->first);
         }
+        _cache.front()->second = value;
+        return true;
     }
 
-    //put new element
-    _values_list.push_front(value);
-    _values_list.get_head()->key = key; //
-    _backend[_values_list.get_head()->key] = _values_list.get_head();
-    _current_size += new_element_size;
-
-    return true;
+    return false;
 }
 
 // See MapBasedGlobalLockImpl.h
-bool MapBasedGlobalLockImpl::Set(const std::string &key, const std::string &value) {
+bool MapBasedGlobalLockImpl::Delete(const std::string &key)
+{
+    std::lock_guard<std::mutex> lock(_lock);
 
-    //check if we have enought place
-    size_t new_element_size = key.size() + value.size();
-    if (new_element_size > _max_size) {
-        //too big
-        return false;
-    }
-
-    std::lock_guard<std::mutex> lock(_m);
-
-    //check if the key is present
-    auto find_element = _backend.find(key);
-    if (find_element == _backend.end()) {
-        //element is absent
-        return false;
-    }
-
-    //clear space for a new
-    size_t new_value_size = value.size();
-    size_t old_value_size = find_element->second->value.size();
-    while((_current_size - old_value_size + new_value_size) > _max_size) {
-        if (DeleteTail() == false) {
-            return false;
-        }
-    }
-
-    //now set the  element
-    find_element->second->value = value;
-    _current_size = _current_size - old_value_size + new_value_size;
-
-    //make head
-    _values_list.make_head(find_element->second);
-    return true;
-
-}
-
-// See MapBasedGlobalLockImpl.h
-bool MapBasedGlobalLockImpl::Delete(const std::string &key) {
-
-    std::lock_guard<std::mutex> lock(_m);
-
-    auto find_element = _backend.find(key);
-    if (find_element == _backend.end()) {
-        //element is absent
-        return false;
-    }
-
-    auto node = find_element->second;
-    size_t element_size = key.size() + node->value.size(); //get size
-    _backend.erase(key); //delete from map
-    _values_list.remove(node); //delete from list
-
-    _current_size -= element_size; //correct size
-    return true;
-}
-
-// See MapBasedGlobalLockImpl.h
-bool MapBasedGlobalLockImpl::Get(const std::string &key, std::string &value) const {
-
-    std::lock_guard<std::mutex> lock(_m);
-
-    auto find_element = _backend.find(key);
-    if (find_element == _backend.end()) {
-        //element is not present
-        return false;
-    }
-
-    value = find_element->second->value;
-
-    //make head
-    _values_list.make_head(find_element->second);
-
-    return true;
-}
-
-
-bool MapBasedGlobalLockImpl::DeleteTail () {
-    std::string key = _values_list.get_tail()->key;
-    size_t element_size = key.size() + _values_list.get_tail()->value.size();
+    auto cache_elem = _backend.find(key);
+    _cache.erase(cache_elem->second);
     _backend.erase(key);
-    _values_list.pop_back();
-    _current_size -= (element_size);
     return true;
+}
+
+// See MapBasedGlobalLockImpl.h
+bool MapBasedGlobalLockImpl::Get(const std::string &key, std::string &value) const
+{
+    std::lock_guard<std::mutex> lock(_lock);
+    
+    auto cache_it = _backend.find(key);
+    if (cache_it != _backend.end())
+    {
+        _cache.to_front(cache_it->second);
+        value = _cache.front()->second;
+        return true;
+    }
+
+    return false;
+}
+
+List::List()
+{
+    _front = NULL;
+    _back = NULL;
+}
+
+List::~List()
+{
+    if (_front == NULL)
+    {
+        return;
+    }
+    while (_front->next != NULL)
+    {
+        _front = _front->next;
+        delete _front->prev;
+    }
+    delete _front;
+}
+
+Node* List::front()
+{
+    return _front;
+}
+
+Node* List::back()
+{
+    return _back;
+}
+
+void List::pop_back()
+{
+    if (_back->prev != NULL)
+    {
+        _back = _back->prev;
+        delete _back->next;
+        _back->next = NULL;
+    } else {
+        _front = NULL;
+        delete _back;
+        _back = NULL;
+    }
+}
+
+void List::erase(Node* node)
+{
+    if (node->next == NULL)
+    {
+        pop_back();
+    }
+    if (node->prev == NULL)
+    {
+        _front = node->next;
+        _front->prev = NULL;
+    } else {
+        node->prev->next = node->next;
+    }
+    node->next->prev = node->prev;
+    delete node;
+}
+
+void List::push_front(std::string first, std::string second)
+{
+    Node* tmp = new Node;
+    tmp->next = _front;
+    tmp->prev = NULL;
+    tmp->first = first;
+    tmp->second = second;
+    if (_front != NULL)
+    {
+        _front->prev = tmp;
+    }
+    _front = tmp;
+    if (_back == NULL)
+    {
+        _back = _front;
+    }
+}
+
+void List::to_front(Node* new_front)
+{
+    if (new_front->prev == NULL)
+    {
+        return;
+    }
+    new_front->prev->next = new_front->next;
+    if (new_front->next != NULL)
+    {
+        new_front->next->prev = new_front->prev;
+    } else if ((_back != NULL) && (_back->prev != NULL)) {
+        _back->prev->next = NULL;
+    }
+    new_front->prev = NULL;
+    new_front->next = _front;
+    if (_front != NULL)
+    {
+        _front->prev = new_front;
+    }
+    _front = new_front;
 }
 
 } // namespace Backend

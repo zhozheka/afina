@@ -26,7 +26,7 @@ private:
         char *Low = nullptr;
 
         // coroutine stack end address
-        char *High = nullptr;
+        char *Hight = nullptr;
 
         // coroutine stack copy buffer
         std::tuple<char *, uint32_t> Stack = std::make_tuple(nullptr, 0);
@@ -42,7 +42,7 @@ private:
     /**
      * Where coroutines stack begins
      */
-     char *StackBottom;
+    char *StackBottom;
 
     /**const int&
      * Current coroutine
@@ -88,7 +88,6 @@ public:
      * Also there are no guarantee what coroutine will get execution, it could be caller of the current one or
      * any other which is ready to run
      */
-
     void yield();
 
     /**
@@ -128,6 +127,7 @@ public:
         }
 
         // Shutdown runtime
+        delete []std::get<0>(idle_ctx->Stack);
         delete idle_ctx;
         this->StackBottom = 0;
     }
@@ -174,7 +174,7 @@ public:
             // current coroutine finished, and the pointer is not relevant now
             cur_routine = nullptr;
             pc->prev = pc->next = nullptr;
-            delete std::get<0>(pc->Stack);
+            delete []std::get<0>(pc->Stack);
             delete pc;
 
             // We cannot return here, as this function "returned" once already, so here we must select some other

@@ -8,10 +8,6 @@
 #include <unordered_set>
 
 #include <afina/network/Server.h>
-#include <afina/execute/Command.h>
-#include "../../protocol/Parser.h"
-#include <afina/Executor.h>
-#include <sstream>
 
 namespace Afina {
 namespace Network {
@@ -27,7 +23,7 @@ public:
     ~ServerImpl();
 
     // See Server.h
-    void Start(uint16_t port, uint16_t workers) override;
+    void Start(uint32_t port, uint16_t workers) override;
 
     // See Server.h
     void Stop() override;
@@ -44,38 +40,36 @@ protected:
     /**
      * Methos is running for each connection
      */
-    void RunConnection(int client_socket);
-
-    //void CleanParsed(char* buf, size_t& parsed, ssize_t& bufsize);
+    void RunConnection(int);
 
 private:
-    int server_socket;
+    static const ssize_t BUF_SIZE = 1024;
 
-    const ssize_t BUF_SIZE = 1024;
     static void *RunAcceptorProxy(void *p);
+
+    using RunConnectionProxyArgs = std::pair<ServerImpl *, int>;
     static void *RunConnectionProxy(void *p);
 
-    std::string GetVal(ssize_t body_size, int &client_socket);
-
-    void CleanParsed(char* buf, size_t& parsed, ssize_t& readed);
+    bool Parse(std::string str_buf, int client_socket);
 
     // Atomic flag to notify threads when it is time to stop. Note that
-    // flag must be atomic in order to safely publish changes cross thread
+    // flag must be atomic in order to safely publisj changes cross thread
     // bounds
     std::atomic<bool> running;
 
     // Thread that is accepting new connections
     pthread_t accept_thread;
+    int server_socket;
 
     // Maximum number of client allowed to exists concurrently
     // on server, permits access only from inside of accept_thread.
     // Read-only
     uint16_t max_workers;
-    uint16_t n_connections;
+
     // Port to listen for new connections, permits access only from
     // inside of accept_thread
     // Read-only
-    uint16_t listen_port;
+    uint32_t listen_port;
 
     // Mutex used to access connections list
     std::mutex connections_mutex;
@@ -85,10 +79,8 @@ private:
     std::condition_variable connections_cv;
 
     // Threads that are processing connection data, permits
-    // access only from inside of accept_threadz
+    // access only from inside of accept_thread
     std::unordered_set<pthread_t> connections;
-
-    Executor executor;
 };
 
 } // namespace Blocking

@@ -7,6 +7,7 @@ set(SOURCE_FILES
     Set.cpp
     Replace.cpp
     Stats.cpp
+    Executor.cpp
 )
 
 add_library(Execute ${SOURCE_FILES})

@@ -279,8 +279,6 @@ void Worker::OnAllocate(uv_handle_t *conn, size_t suggested_size, uv_buf_t *buf)
 // See Worker.h
 void Worker::OnRead(uv_stream_t *conn, ssize_t nread, const uv_buf_t *buf) {
     std::cout << "network debug:" << __PRETTY_FUNCTION__ << std::endl;
-
-
     assert(conn != nullptr);
     Connection *pconn = (Connection *)(conn);
 
@@ -290,9 +288,8 @@ void Worker::OnRead(uv_stream_t *conn, ssize_t nread, const uv_buf_t *buf) {
         return;
     } else if (pconn->state == ConnectionState::sClosed) {
         return;
-    } else {
-        //std::cout << buf << std::endl;
     }
+
     // Look for the command delimeters in the [parsed, input.size()). Note that buffer could contains
     // many commands, not only one
     try {
@@ -301,7 +298,6 @@ void Worker::OnRead(uv_stream_t *conn, ssize_t nread, const uv_buf_t *buf) {
             // Read header or body if needs
             if (pconn->state == ConnectionState::sRecvHeader) {
                 // Try to parse command out
-                std::cout << "pconn->input " << pconn->input;
                 if (!pconn->parser.Parse(pconn->input, pconn->input_used, pconn->input_parsed)) {
                     continue;
                 }

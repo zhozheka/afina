@@ -6,8 +6,8 @@
 #include <afina/network/Server.h>
 
 namespace Afina {
-    namespace Network {
-        namespace NonBlocking {
+namespace Network {
+namespace NonBlocking {
 
 // Forward declaration, see Worker.h
 class Worker;
@@ -30,6 +30,7 @@ public:
     // See Server.h
     void Join() override;
 
+
 private:
     // Port to listen for new connections, permits access only from
     // inside of accept_thread
@@ -39,8 +40,6 @@ private:
     // Thread that is accepting new connections
     std::vector<Worker> workers;
 
-    //Running flag for correctly stopping
-    std::shared_ptr<bool> running;
 };
 
 } // namespace NonBlocking

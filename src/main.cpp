@@ -34,6 +34,7 @@ void timer_handler(uv_timer_t *handle) {
 }
 
 int main(int argc, char **argv) {
+
     // Build version
     // TODO: move into Version.h as a function
     std::stringstream app_string;
@@ -83,12 +84,14 @@ int main(int argc, char **argv) {
         network_type = options["network"].as<std::string>();
     }
 
+
     if (network_type == "uv") {
         app.server = std::make_shared<Afina::Network::UV::ServerImpl>(app.storage);
     } else if (network_type == "blocking") {
         app.server = std::make_shared<Afina::Network::Blocking::ServerImpl>(app.storage);
     } else if (network_type == "nonblocking") {
         app.server = std::make_shared<Afina::Network::NonBlocking::ServerImpl>(app.storage);
+
     } else {
         throw std::runtime_error("Unknown network type");
     }
@@ -99,10 +102,19 @@ int main(int argc, char **argv) {
     uv_loop_t loop;
     uv_loop_init(&loop);
 
-    uv_signal_t sig;
-    uv_signal_init(&loop, &sig);
-    uv_signal_start(&sig, signal_handler, SIGTERM | SIGKILL);
-    sig.data = &app;
+    //uv_signal_t sig;
+    //uv_signal_init(&loop, &sig);
+    //uv_signal_start(&sig, signal_handler, SIGTERM);
+    //uv_signal_start(&sig, signal_handler, SIGKILL);
+    //sig.data = &app;
+
+    uv_signal_t sig_term, sig_int;
+    uv_signal_init(&loop, &sig_term);
+    uv_signal_init(&loop, &sig_int);
+    uv_signal_start(&sig_term, signal_handler, SIGTERM);
+    uv_signal_start(&sig_int, signal_handler, SIGINT);
+    sig_term.data = &app;
+    sig_int.data = &app;
 
     uv_timer_t timer;
     uv_timer_init(&loop, &timer);
@@ -112,7 +124,7 @@ int main(int argc, char **argv) {
     // Start services
     try {
         app.storage->Start();
-        app.server->Start(8080, 2);
+        app.server->Start(8080, 10);
 
         // Freeze current thread and process events
         std::cout << "Application started" << std::endl;

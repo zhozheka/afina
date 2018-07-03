@@ -2,7 +2,11 @@
 #define AFINA_NETWORK_NONBLOCKING_WORKER_H
 
 #include <memory>
+#include <atomic>
 #include <pthread.h>
+#include <vector>
+#include <string>
+#include <unistd.h>
 
 namespace Afina {
 
@@ -12,15 +16,36 @@ class Storage;
 namespace Network {
 namespace NonBlocking {
 
+enum class State {
+    kReading,
+    kBuilding,
+    kWriting
+};
+
+struct Connection {
+    Connection(int _fd) : fd(_fd), state(State::kReading) {
+        read_str.clear();
+        write_str.clear();
+    }
+    ~Connection(void) {
+        close(fd);
+    }
+    int fd;
+    std::string read_str;
+    std::string write_str;
+    State state;
+};
+
 /**
-* # Thread running epoll
-* On Start spaws background thread that is doing epoll on the given server
-* socket and process incoming connections and its data
-*/
+ * # Thread running epoll
+ * On Start spaws background thread that is doing epoll on the given server
+ * socket and process incoming connections and its data
+ */
 class Worker {
 public:
-    Worker(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<bool> run);
+    Worker(std::shared_ptr<Afina::Storage> ps);
     ~Worker();
+    Worker(const Worker& w) : pStorage(w.pStorage) {};
 
     /**
      * Spaws new background thread that is doing epoll on the given server
@@ -42,21 +67,34 @@ public:
      * been destoryed
      */
     void Join();
-    static void *OnRunProxy(void*);
-    static int HandleConnection(int,int);
+
+
+    pthread_t thread;
 
 protected:
     /**
      * Method executing by background thread
      */
-    void* OnRun(void *args);
+    void OnRun(int server_socket);
 
 private:
-    pthread_t thread;
-    //Storage from ServerImpl initialization
+    using OnRunProxyArgs = std::pair<Worker*, int>;
+    using Connection = struct Connection;
+
+    bool Read(Connection* conn);
+    static void* OnRunProxy(void* args);
+    void EraseConnection(int client_socket);
+
+    std::vector<std::unique_ptr<Connection>> connections;
     std::shared_ptr<Afina::Storage> pStorage;
-    //Running flag for correctly stopping
-    std::shared_ptr<bool> running;
+    int epfd;
+    std::atomic<bool> running;
+    int server_socket;
+
+
+    const size_t BUF_SIZE = 1024;
+    const size_t EPOLL_MAX_EVENTS = 10;
+    const size_t CHUNK_SIZE = 128;
 };
 
 } // namespace NonBlocking

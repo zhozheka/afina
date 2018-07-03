@@ -1,13 +1,13 @@
 #ifndef AFINA_STORAGE_MAP_BASED_GLOBAL_LOCK_IMPL_H
 #define AFINA_STORAGE_MAP_BASED_GLOBAL_LOCK_IMPL_H
 
-#include <map>
+#include <unordered_map>
 #include <mutex>
 #include <string>
-#include <unordered_map>
-#include "list_lru.h"
-#include <afina/Storage.h>
+#include <list>
 #include <functional>
+
+#include <afina/Storage.h>
 
 namespace Afina {
 namespace Backend {
@@ -17,11 +17,32 @@ namespace Backend {
  *
  *
  */
+ struct Node {
+    Node* prev;
+    Node* next;
+    std::string first;
+    std::string second;
+ };
+
+ class List {
+ public:
+    List();
+    ~List();
+    Node* front();
+    Node* back();
+    void pop_back();
+    void push_front(std::string first, std::string second);
+    void erase(Node* node);
+    void to_front(Node* new_front);
+
+ private:
+    Node* _front;
+    Node* _back;
+ };
+
 class MapBasedGlobalLockImpl : public Afina::Storage {
 public:
-    MapBasedGlobalLockImpl(size_t max_size = 1024)
-    : _max_size(max_size)
-    , _current_size(0) {}
+    MapBasedGlobalLockImpl(size_t max_size = 1024) : _max_size(max_size), _size(0) {}
     ~MapBasedGlobalLockImpl() {}
 
     // Implements Afina::Storage interface
@@ -39,29 +60,16 @@ public:
     // Implements Afina::Storage interface
     bool Get(const std::string &key, std::string &value) const override;
 
-    // Deletes the last element of _backend
-    bool DeleteTail();
-
-
-
 private:
-    using value_type = std::string;
-
-    mutable list_lru<value_type> _values_list; //pair of key and value
-
-    using backend_wrapper  =  std::unordered_map <std::reference_wrapper<const std::string>,
-    node<std::string>*,
-    std::hash<std::string>,
-    std::equal_to<std::string>>;
-
-    mutable backend_wrapper _backend;
-
-
     size_t _max_size;
-    size_t _current_size;
+    size_t _size;
+    mutable std::mutex _lock;
 
-    mutable std::mutex _m;
-
+    std::unordered_map< std::reference_wrapper<const std::string>,
+                        Node*,
+                        std::hash<std::string>,
+                        std::equal_to<std::string>> _backend;
+    mutable List _cache;
 };
 
 } // namespace Backend

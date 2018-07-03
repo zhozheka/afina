@@ -1,5 +1,6 @@
 #include "ServerImpl.h"
 
+#include <atomic>
 #include <cassert>
 #include <cstring>
 #include <iostream>
@@ -24,9 +25,7 @@ namespace Network {
 namespace NonBlocking {
 
 // See Server.h
-ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps) : Server(ps) {
-    running = std::make_shared<bool>();
-}
+ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps) : Server(ps) {}
 
 // See Server.h
 ServerImpl::~ServerImpl() {}
@@ -34,6 +33,7 @@ ServerImpl::~ServerImpl() {}
 // See Server.h
 void ServerImpl::Start(uint32_t port, uint16_t n_workers) {
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
+
     // If a client closes a connection, this will generally produce a SIGPIPE
     // signal that will kill the process. We want to ignore this signal, so send()
     // just returns -1 when this happens.
@@ -72,9 +72,13 @@ void ServerImpl::Start(uint32_t port, uint16_t n_workers) {
         close(server_socket);
         throw std::runtime_error("Socket listen() failed");
     }
-    *running = true;
-    for (int i = 0; i < n_workers; i++) {
-        workers.emplace_back(pStorage,running);
+    workers.reserve(n_workers);
+
+    workers.emplace_back(pStorage);
+    workers.front().Start(server_socket);
+
+    for (int i = 1; i < n_workers; i++) {
+        workers.emplace_back(pStorage);
         workers.back().Start(server_socket);
     }
 }
@@ -82,7 +86,6 @@ void ServerImpl::Start(uint32_t port, uint16_t n_workers) {
 // See Server.h
 void ServerImpl::Stop() {
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    *running = false;
     for (auto &worker : workers) {
         worker.Stop();
     }
@@ -95,6 +98,7 @@ void ServerImpl::Join() {
         worker.Join();
     }
 }
+
 
 } // namespace NonBlocking
 } // namespace Network
