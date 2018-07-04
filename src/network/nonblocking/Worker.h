@@ -18,21 +18,21 @@ namespace NonBlocking {
 
 enum class State {
     kReading,
-    kBuilding,
+    kBody,
     kWriting
 };
 
 struct Connection {
     Connection(int _socket) : socket(_socket), state(State::kReading) {
-        read_str.clear();
-        write_str.clear();
+        readBuf = "";
+        outBuf = "";
     }
     ~Connection(void) {
         close(socket);
     }
     int socket;
-    std::string read_str;
-    std::string write_str;
+    std::string readBuf;
+    std::string outBuf;
     State state;
 };
 
@@ -79,7 +79,6 @@ protected:
 
 private:
     using OnRunProxyArgs = std::pair<Worker*, int>;
-    using Connection = struct Connection;
 
     bool Read(Connection* conn);
     static void* OnRunProxy(void* args);

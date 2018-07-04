@@ -28,8 +28,7 @@ namespace NonBlocking {
 Worker::Worker(std::shared_ptr<Afina::Storage> ps): pStorage(ps) {}
 
 // See Worker.h
-Worker::~Worker() {
-}
+Worker::~Worker() {}
 
 void* Worker::OnRunProxy(void* _args) {
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
@@ -65,28 +64,23 @@ void Worker::Join() {
     pthread_join(thread, NULL);
 }
 
-bool Worker::Read(Connection* conn)
-{
+bool Worker::Read(Connection* conn) {
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
     char buf[BUF_SIZE];
     Protocol::Parser parser;
     int socket = conn->socket;
-    while (running.load())
-    {
+
+    while (running.load()) {
         size_t parsed = 0;
-        if (conn->state == State::kReading)
-        {
+        if (conn->state == State::kReading) {
             int n_read = 0;
             bool isParsed = true;
-            try
-            {
-                while (!parser.Parse(conn->read_str, parsed))
-                {
+            try {
+                while (!parser.Parse(conn->readBuf, parsed)) {
                     isParsed = false;
                     n_read = read(socket, buf, BUF_SIZE);
-                    if (n_read > 0)
-                    {
-                        conn->read_str.append(buf, n_read);
+                    if (n_read > 0) {
+                        conn->readBuf.append(buf, n_read);
                         isParsed = true;
                         parser.Reset();
                     } else {
@@ -95,46 +89,41 @@ bool Worker::Read(Connection* conn)
                 }
             } catch (std::runtime_error &ex) {
                 std::cout << ex.what() << '\n';
-                conn->write_str = std::string("WORKER_CONNECTION_ERROR ") + ex.what() + "\r\n";
-                conn->read_str.clear();
+                conn->outBuf = std::string("WORKER_CONNECTION_ERROR ") + ex.what() + "\r\n";
+                conn->readBuf.clear();
                 conn->state = State::kWriting;
                 continue;
             }
 
-            if (n_read < 0)
-            {
+            if (n_read < 0) {
                 if (!((errno == EWOULDBLOCK || errno == EAGAIN) && running.load())) {
                     return true;
                 }
             }
 
-            if (isParsed)
-            {
-                conn->read_str.erase(0, parsed);
-                conn->state = State::kBuilding;
+            if (isParsed) {
+                conn->readBuf.erase(0, parsed);
+                conn->state = State::kBody;
             } else {
                 parser.Reset();
             }
         }
 
-        if (conn->state == State::kBuilding)
-        {
+        if (conn->state == State::kBody) {
             uint32_t body_size = 0;
             auto command = parser.Build(body_size);
-            if (conn->read_str.size() >= body_size)
-            {
-                std::string str_command(conn->read_str, 0, body_size);
-                conn->read_str.erase(0, body_size);
-                if (conn->read_str[0] == '\r')
-                {
-                    conn->read_str.erase(0, 2);
+            if (conn->readBuf.size() >= body_size) {
+                std::string str_command(conn->readBuf, 0, body_size);
+                conn->readBuf.erase(0, body_size);
+                if (conn->readBuf[0] == '\r') {
+                    conn->readBuf.erase(0, 2);
                 }
                 try {
-                    command->Execute(*pStorage, str_command, conn->write_str);
-                    conn->write_str += "\r\n";
+                    command->Execute(*pStorage, str_command, conn->outBuf);
+                    conn->outBuf += "\r\n";
                 } catch (std::runtime_error &ex) {
-                    conn->write_str = std::string("WORKER_CONNECTION_ERROR ") + ex.what() + "\r\n";
-                    conn->read_str.clear();
+                    conn->outBuf = std::string("WORKER_CONNECTION_ERROR ") + ex.what() + "\r\n";
+                    conn->readBuf.clear();
                 }
                 parser.Reset();
                 conn->state = State::kWriting;
@@ -143,34 +132,29 @@ bool Worker::Read(Connection* conn)
             }
         }
 
-        if (conn->state == State::kWriting)
-        {
+        if (conn->state == State::kWriting) {
             size_t new_chunk_size = 0;
             int n_write = 1;
-            while (new_chunk_size < CHUNK_SIZE)
-            {
-                n_write = write(socket, conn->write_str.c_str(), conn->write_str.size());
+            while (new_chunk_size < CHUNK_SIZE) {
+                n_write = write(socket, conn->outBuf.c_str(), conn->outBuf.size());
 
                 if (n_write > 0) {
                     new_chunk_size += n_write;
-                    conn->write_str.erase(0, n_write);
+                    conn->outBuf.erase(0, n_write);
                 } else {
                     break;
                 }
             }
 
-            if (n_write < 0)
-            {
+            if (n_write < 0) {
                 if (!((errno == EWOULDBLOCK || errno == EAGAIN) && running.load())) {
                     return true;
                 }
             }
 
-            if (conn->write_str.size() == 0)
-            {
+            if (conn->outBuf.size() == 0) {
                 conn->state = State::kReading;
-                if (conn->read_str.size() == 0)
-                {
+                if (conn->readBuf.size() == 0) {
                     return false;
                 }
             }
@@ -179,28 +163,27 @@ bool Worker::Read(Connection* conn)
     return false;
 }
 
-void Worker::EraseConnection(int client_socket)
-{
-    for (auto it = connections.begin(); it != connections.end(); it++)
-    {
-        if ((*it)->socket == client_socket)
-        {
+void Worker::EraseConnection(int client_socket) {
+    for (auto it = connections.begin(); it != connections.end(); it++) {
+        if ((*it)->socket == client_socket) {
             connections.erase(it);
             break;
         }
     }
+    //for (auto &conn: connections) {
+    //     if (conn->socket == client_socket) {
+    //         connection.erase(conn);
+    //     }
+    // }
 }
 
 // See Worker.h
-void Worker::OnRun(int _server_socket)
-{
+void Worker::OnRun(int _server_socket) {
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
 
-
     server_socket = _server_socket;
-
-    if ((epfd = epoll_create(EPOLL_MAX_EVENTS)) < 0)
-    {
+    auto epfd = epoll_create(EPOLL_MAX_EVENTS);
+    if (epfd < 0) {
         throw std::runtime_error("Worker failed to create epoll file descriptor");
     }
 
@@ -210,32 +193,26 @@ void Worker::OnRun(int _server_socket)
     event.events = EPOLLEXCLUSIVE | EPOLLIN | EPOLLHUP | EPOLLERR;
     event.data.ptr = server_con;
 
-    if (epoll_ctl(epfd, EPOLL_CTL_ADD, server_socket, &event) == -1)
-    {
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, server_socket, &event) == -1) {
         throw std::runtime_error("Server epoll_ctl() failed");
     }
 
-    while (running.load())
-    {
+    while (running.load()) {
         int n_ev = epoll_wait(epfd, events_buffer, EPOLL_MAX_EVENTS, -1);
-        if (n_ev == -1)
-        {
+        if (n_ev == -1) {
             throw std::runtime_error("Worker epoll_wait() failed");
         }
 
-        for (int i = 0; i < n_ev; ++i)
-        {
+        for (int i = 0; i < n_ev; ++i) {
             Connection* connection = reinterpret_cast<Connection*>(events_buffer[i].data.ptr);
-            int client_socket = 0;
-            if (connection->socket == server_socket)
-            {
-                client_socket = accept(server_socket, NULL, NULL);
+            //new connection
+            if (connection->socket == server_socket) {
+                auto client_socket = accept(server_socket, NULL, NULL);
                 if (client_socket == -1) {
                     if ((errno != EWOULDBLOCK) && (errno != EAGAIN)) {
                         close(server_socket);
                         epoll_ctl(epfd, EPOLL_CTL_DEL, server_socket, NULL);
-                        if (running.load())
-                        {
+                        if (running.load()) {
                             throw std::runtime_error("Worker failed to accept()");
                         }
                     }
@@ -249,15 +226,14 @@ void Worker::OnRun(int _server_socket)
                         throw std::runtime_error("Worker failed to assign client socket to epoll");
                     }
                 }
+            //proceed connection
             } else {
-                client_socket = connection->socket;
-                if (events_buffer[i].events & (EPOLLERR | EPOLLHUP))
-                {
+                auto client_socket = connection->socket;
+                if (events_buffer[i].events & (EPOLLERR | EPOLLHUP)) {
                     epoll_ctl(epfd, EPOLL_CTL_DEL, client_socket, NULL);
                     EraseConnection(client_socket);
                 } else if (events_buffer[i].events & (EPOLLIN | EPOLLOUT)) {
-                    if (!Read(connection))
-                    {
+                    if (!Read(connection)) {
                         epoll_ctl(epfd, EPOLL_CTL_DEL, client_socket, NULL);
                         EraseConnection(client_socket);
                     }
@@ -268,9 +244,9 @@ void Worker::OnRun(int _server_socket)
             }
         }
     }
-    for (auto it = connections.begin(); it != connections.end(); it++)
-    {
-        epoll_ctl(epfd, EPOLL_CTL_DEL, (*it)->socket, NULL);
+
+    for (auto &conn: connections) {
+        epoll_ctl(epfd, EPOLL_CTL_DEL, conn->socket, NULL);
     }
     connections.clear();
     close(epfd);
