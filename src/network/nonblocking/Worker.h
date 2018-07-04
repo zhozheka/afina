@@ -8,6 +8,7 @@
 #include <string>
 #include <unistd.h>
 #include <afina/execute/Command.h>
+#include "../../protocol/Parser.h"
 
 #define BUF_SIZE 1024
 
@@ -27,17 +28,14 @@ enum class State {
 class Connection {
 public:
     Connection(int _socket) : socket(_socket), state(State::Read) {
-        readBuf = "";
-        outBuf = "";
     }
     ~Connection(void) {
         close(socket);
     }
     int socket;
-    std::string readBuf;
-    std::string outBuf;
     std::string body;
     std::string out;
+    Protocol::Parser parser;
 
     std::unique_ptr<Execute::Command> cmd;
     State state;

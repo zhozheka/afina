@@ -71,16 +71,14 @@ void Worker::Join() {
 
 bool Worker::Proc(Connection* conn) {
     auto buffer = conn->buffer;
-    //std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    //char buf[BUF_SIZE];
-    Protocol::Parser parser;
     int socket = conn->socket;
 
     while (running.load()) {
         try {
+            // read command
            if (conn->state == State::Read) {
                size_t parsed = 0;
-               while (!parser.Parse(buffer, conn->position, parsed)) {
+               while (!conn->parser.Parse(buffer, conn->position, parsed)) {
                    std::memmove(buffer, buffer + parsed, conn->position - parsed);
                    conn->position -= parsed;
 
@@ -98,14 +96,14 @@ bool Worker::Proc(Connection* conn) {
                std::memmove(buffer, buffer + parsed, conn->position - parsed);
                conn->position -= parsed;
 
-               conn->cmd = parser.Build(conn->body_size);
+               conn->cmd = conn->parser.Build(conn->body_size);
                conn->body_size += 2;
-               parser.Reset();
+               conn->parser.Reset();
 
                conn->body.clear();
                conn->state = State::Body;
            }
-
+           // read body
            if (conn->state == State::Body) {
                if (conn->body_size > 2) {
                    while (conn->body_size > conn->position) {
@@ -138,9 +136,11 @@ bool Worker::Proc(Connection* conn) {
                conn->state = State::Write;
            }
        } catch (std::runtime_error &e) {
-           conn->out = std::string("SERVER_ERROR ") + e.what() + std::string("\r\n");
-           std::cout << "catch" << std::endl;
-           conn->state = State::Write;
+           std::string err = std::string("SERVER_ERROR ") + e.what() + std::string("\r\n");
+           std::cout << err << std::endl;
+           conn->parser.Reset();
+           return false;
+           //conn->state = State::Write;
        }
        if (conn->state == State::Write) {
            if (conn->out.size() > 2) {
@@ -236,6 +236,7 @@ void Worker::OnRun(int _server_socket) {
                     EraseConnection(client_socket);
                 } else if (events_buffer[i].events & (EPOLLIN | EPOLLOUT)) {
                     if (!Proc(connection)) {
+                        //delete connection;
                         epoll_ctl(epfd, EPOLL_CTL_DEL, client_socket, NULL);
                         EraseConnection(client_socket);
                     }
@@ -246,6 +247,7 @@ void Worker::OnRun(int _server_socket) {
             }
         }
     }
+
 
     for (auto &conn: connections) {
         epoll_ctl(epfd, EPOLL_CTL_DEL, conn->socket, NULL);
