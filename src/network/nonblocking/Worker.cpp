@@ -198,16 +198,6 @@ void Worker::OnRun(int _server_socket)
 {
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
 
-    // TODO: implementation here
-    // 1. Create epoll_context here
-    // 2. Add server_socket to context
-    // 3. Accept new connections, don't forget to call make_socket_nonblocking on
-    //    the client socket descriptor
-    // 4. Add connections to the local context
-    // 5. Process connection events
-    //
-    // Do not forget to use EPOLLEXCLUSIVE flag when register socket
-    // for events to avoid thundering herd type behavior.
 
     server_socket = _server_socket;
 
@@ -227,17 +217,15 @@ void Worker::OnRun(int _server_socket)
         throw std::runtime_error("Server epoll_ctl() failed");
     }
 
-
-
     while (running.load())
     {
-        int n = epoll_wait(epfd, events_buffer, EPOLL_MAX_EVENTS, -1);
-        if (n == -1)
+        int n_ev = epoll_wait(epfd, events_buffer, EPOLL_MAX_EVENTS, -1);
+        if (n_ev == -1)
         {
             throw std::runtime_error("Worker epoll_wait() failed");
         }
 
-        for (int i = 0; i < n; ++i)
+        for (int i = 0; i < n_ev; ++i)
         {
             Connection* connection = reinterpret_cast<Connection*>(events_buffer[i].data.ptr);
             int client_socket = 0;
