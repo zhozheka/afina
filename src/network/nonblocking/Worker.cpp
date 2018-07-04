@@ -70,9 +70,7 @@ bool Worker::Read(Connection* conn)
     std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
     char buf[BUF_SIZE];
     Protocol::Parser parser;
-    int write_socket, read_socket;
-    read_socket = conn->fd;
-    write_socket = conn->fd;
+    int socket = conn->socket;
     while (running.load())
     {
         size_t parsed = 0;
@@ -85,7 +83,7 @@ bool Worker::Read(Connection* conn)
                 while (!parser.Parse(conn->read_str, parsed))
                 {
                     isParsed = false;
-                    n_read = read(read_socket, buf, BUF_SIZE);
+                    n_read = read(socket, buf, BUF_SIZE);
                     if (n_read > 0)
                     {
                         conn->read_str.append(buf, n_read);
@@ -151,7 +149,7 @@ bool Worker::Read(Connection* conn)
             int n_write = 1;
             while (new_chunk_size < CHUNK_SIZE)
             {
-                n_write = write(write_socket, conn->write_str.c_str(), conn->write_str.size());
+                n_write = write(socket, conn->write_str.c_str(), conn->write_str.size());
 
                 if (n_write > 0) {
                     new_chunk_size += n_write;
@@ -185,7 +183,7 @@ void Worker::EraseConnection(int client_socket)
 {
     for (auto it = connections.begin(); it != connections.end(); it++)
     {
-        if ((*it)->fd == client_socket)
+        if ((*it)->socket == client_socket)
         {
             connections.erase(it);
             break;
@@ -229,7 +227,7 @@ void Worker::OnRun(int _server_socket)
         {
             Connection* connection = reinterpret_cast<Connection*>(events_buffer[i].data.ptr);
             int client_socket = 0;
-            if (connection->fd == server_socket)
+            if (connection->socket == server_socket)
             {
                 client_socket = accept(server_socket, NULL, NULL);
                 if (client_socket == -1) {
@@ -252,7 +250,7 @@ void Worker::OnRun(int _server_socket)
                     }
                 }
             } else {
-                client_socket = connection->fd;
+                client_socket = connection->socket;
                 if (events_buffer[i].events & (EPOLLERR | EPOLLHUP))
                 {
                     epoll_ctl(epfd, EPOLL_CTL_DEL, client_socket, NULL);
@@ -272,7 +270,7 @@ void Worker::OnRun(int _server_socket)
     }
     for (auto it = connections.begin(); it != connections.end(); it++)
     {
-        epoll_ctl(epfd, EPOLL_CTL_DEL, (*it)->fd, NULL);
+        epoll_ctl(epfd, EPOLL_CTL_DEL, (*it)->socket, NULL);
     }
     connections.clear();
     close(epfd);

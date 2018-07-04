@@ -23,14 +23,14 @@ enum class State {
 };
 
 struct Connection {
-    Connection(int _fd) : fd(_fd), state(State::kReading) {
+    Connection(int _socket) : socket(_socket), state(State::kReading) {
         read_str.clear();
         write_str.clear();
     }
     ~Connection(void) {
-        close(fd);
+        close(socket);
     }
-    int fd;
+    int socket;
     std::string read_str;
     std::string write_str;
     State state;
