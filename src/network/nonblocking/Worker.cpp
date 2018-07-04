@@ -20,6 +20,9 @@
 #include "Utils.h"
 
 #define EPOLLEXCLUSIVE 1<<28
+#define BUF_SIZE 1024
+#define EPOLL_MAX_EVENTS 10
+
 namespace Afina {
 namespace Network {
 namespace NonBlocking {
@@ -72,7 +75,7 @@ bool Worker::Read(Connection* conn) {
 
     while (running.load()) {
         size_t parsed = 0;
-        if (conn->state == State::kReading) {
+        if (conn->state == State::Read) {
             int n_read = 0;
             bool isParsed = true;
             try {
@@ -91,7 +94,7 @@ bool Worker::Read(Connection* conn) {
                 std::cout << ex.what() << '\n';
                 conn->outBuf = std::string("WORKER_CONNECTION_ERROR ") + ex.what() + "\r\n";
                 conn->readBuf.clear();
-                conn->state = State::kWriting;
+                conn->state = State::Write;
                 continue;
             }
 
@@ -103,13 +106,13 @@ bool Worker::Read(Connection* conn) {
 
             if (isParsed) {
                 conn->readBuf.erase(0, parsed);
-                conn->state = State::kBody;
+                conn->state = State::Body;
             } else {
                 parser.Reset();
             }
         }
 
-        if (conn->state == State::kBody) {
+        if (conn->state == State::Body) {
             uint32_t body_size = 0;
             auto command = parser.Build(body_size);
             if (conn->readBuf.size() >= body_size) {
@@ -126,20 +129,20 @@ bool Worker::Read(Connection* conn) {
                     conn->readBuf.clear();
                 }
                 parser.Reset();
-                conn->state = State::kWriting;
+                conn->state = State::Write;
             } else {
-                conn->state = State::kReading;
+                conn->state = State::Read;
             }
         }
 
-        if (conn->state == State::kWriting) {
-            size_t new_chunk_size = 0;
+        if (conn->state == State::Write) {
+            size_t n_sent = 0;
             int n_write = 1;
-            while (new_chunk_size < CHUNK_SIZE) {
+            while (n_sent < conn->outBuf.size()) {
                 n_write = write(socket, conn->outBuf.c_str(), conn->outBuf.size());
 
                 if (n_write > 0) {
-                    new_chunk_size += n_write;
+                    n_sent += n_write;
                     conn->outBuf.erase(0, n_write);
                 } else {
                     break;
@@ -153,7 +156,7 @@ bool Worker::Read(Connection* conn) {
             }
 
             if (conn->outBuf.size() == 0) {
-                conn->state = State::kReading;
+                conn->state = State::Read;
                 if (conn->readBuf.size() == 0) {
                     return false;
                 }

@@ -10,20 +10,20 @@
 
 namespace Afina {
 
-// Forward declaration, see afina/Storage.h
 class Storage;
 
 namespace Network {
 namespace NonBlocking {
 
 enum class State {
-    kReading,
-    kBody,
-    kWriting
+    Read,
+    Body,
+    Write
 };
 
-struct Connection {
-    Connection(int _socket) : socket(_socket), state(State::kReading) {
+class Connection {
+public:
+    Connection(int _socket) : socket(_socket), state(State::Read) {
         readBuf = "";
         outBuf = "";
     }
@@ -36,11 +36,6 @@ struct Connection {
     State state;
 };
 
-/**
- * # Thread running epoll
- * On Start spaws background thread that is doing epoll on the given server
- * socket and process incoming connections and its data
- */
 class Worker {
 public:
     Worker(std::shared_ptr<Afina::Storage> ps);
@@ -91,9 +86,6 @@ private:
     int server_socket;
 
 
-    const size_t BUF_SIZE = 1024;
-    const size_t EPOLL_MAX_EVENTS = 10;
-    const size_t CHUNK_SIZE = 128;
 };
 
 } // namespace NonBlocking
