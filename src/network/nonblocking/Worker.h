@@ -7,6 +7,9 @@
 #include <vector>
 #include <string>
 #include <unistd.h>
+#include <afina/execute/Command.h>
+
+#define BUF_SIZE 1024
 
 namespace Afina {
 
@@ -33,7 +36,16 @@ public:
     int socket;
     std::string readBuf;
     std::string outBuf;
+    std::string body;
+    std::string out;
+
+    std::unique_ptr<Execute::Command> cmd;
     State state;
+    char buffer[BUF_SIZE];
+    size_t position;
+    uint32_t body_size;
+    size_t bytes_sent_total = 0;
+
 };
 
 class Worker {
@@ -75,7 +87,7 @@ protected:
 private:
     using OnRunProxyArgs = std::pair<Worker*, int>;
 
-    bool Read(Connection* conn);
+    bool Proc(Connection* conn);
     static void* OnRunProxy(void* args);
     void EraseConnection(int client_socket);
 

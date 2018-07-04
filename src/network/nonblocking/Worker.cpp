@@ -14,6 +14,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <memory>
+#include <cstring>
 
 #include "../../protocol/Parser.h"
 #include <afina/execute/Command.h>
@@ -67,101 +69,98 @@ void Worker::Join() {
     pthread_join(thread, NULL);
 }
 
-bool Worker::Read(Connection* conn) {
-    std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
-    char buf[BUF_SIZE];
+bool Worker::Proc(Connection* conn) {
+    auto buffer = conn->buffer;
+    //std::cout << "network debug: " << __PRETTY_FUNCTION__ << std::endl;
+    //char buf[BUF_SIZE];
     Protocol::Parser parser;
     int socket = conn->socket;
 
     while (running.load()) {
-        size_t parsed = 0;
-        if (conn->state == State::Read) {
-            int n_read = 0;
-            bool isParsed = true;
-            try {
-                while (!parser.Parse(conn->readBuf, parsed)) {
-                    isParsed = false;
-                    n_read = read(socket, buf, BUF_SIZE);
-                    if (n_read > 0) {
-                        conn->readBuf.append(buf, n_read);
-                        isParsed = true;
-                        parser.Reset();
-                    } else {
-                        break;
+        try {
+           if (conn->state == State::Read) {
+               size_t parsed = 0;
+               while (!parser.Parse(buffer, conn->position, parsed)) {
+                   std::memmove(buffer, buffer + parsed, conn->position - parsed);
+                   conn->position -= parsed;
+
+                   ssize_t n_read = recv(conn->socket, buffer + conn->position, BUF_SIZE - conn->position, 0);
+                   if (n_read <= 0) {
+                       if ((errno == EWOULDBLOCK || errno == EAGAIN) && n_read < 0 && running.load()) {
+                           return true;
+                       } else {
+                           return false;
+                       }
+                   }
+
+                   conn->position += n_read;
+               }
+               std::memmove(buffer, buffer + parsed, conn->position - parsed);
+               conn->position -= parsed;
+
+               conn->cmd = parser.Build(conn->body_size);
+               conn->body_size += 2;
+               parser.Reset();
+
+               conn->body.clear();
+               conn->state = State::Body;
+           }
+
+           if (conn->state == State::Body) {
+               if (conn->body_size > 2) {
+                   while (conn->body_size > conn->position) {
+                       conn->body.append(buffer, conn->position);
+                       conn->body_size -= conn->position;
+                       conn->position = 0;
+
+
+                       ssize_t n_read = recv(conn->socket, buffer, BUF_SIZE, 0);
+                       if (n_read <= 0) {
+                           if ((errno == EWOULDBLOCK || errno == EAGAIN) && n_read < 0 && running.load()) {
+                               return true;
+                           } else {
+                               return false;
+                           }
+                       }
+
+                       conn->position = n_read;
+                   }
+
+                   conn->body.append(buffer, conn->body_size);
+                   std::memmove(buffer, buffer + conn->body_size, conn->position - conn->body_size);
+                   conn->position -= conn->body_size;
+
+                   conn->body = conn->body.substr(0, conn->body.length() - 2);
+               }
+
+               conn->cmd->Execute(*pStorage, conn->body, conn->out);
+               conn->out.append("\r\n");
+               conn->state = State::Write;
+           }
+       } catch (std::runtime_error &e) {
+           conn->out = std::string("SERVER_ERROR ") + e.what() + std::string("\r\n");
+           std::cout << "catch" << std::endl;
+           conn->state = State::Write;
+       }
+       if (conn->state == State::Write) {
+           if (conn->out.size() > 2) {
+               while (conn->bytes_sent_total < conn->out.size()) {
+
+                   ssize_t n_sent = send(socket, conn->out.data() + conn->bytes_sent_total, conn->out.size() - conn->bytes_sent_total, 0);
+                   if (n_sent < 0) {
+                        if ((errno == EWOULDBLOCK || errno == EAGAIN) && running.load()) {
+                            return true;
+                        } else {
+                            return false;
+                        }
                     }
-                }
-            } catch (std::runtime_error &ex) {
-                std::cout << ex.what() << '\n';
-                conn->outBuf = std::string("WORKER_CONNECTION_ERROR ") + ex.what() + "\r\n";
-                conn->readBuf.clear();
-                conn->state = State::Write;
-                continue;
-            }
 
-            if (n_read < 0) {
-                if (!((errno == EWOULDBLOCK || errno == EAGAIN) && running.load())) {
-                    return true;
-                }
-            }
-
-            if (isParsed) {
-                conn->readBuf.erase(0, parsed);
-                conn->state = State::Body;
-            } else {
-                parser.Reset();
-            }
-        }
-
-        if (conn->state == State::Body) {
-            uint32_t body_size = 0;
-            auto command = parser.Build(body_size);
-            if (conn->readBuf.size() >= body_size) {
-                std::string str_command(conn->readBuf, 0, body_size);
-                conn->readBuf.erase(0, body_size);
-                if (conn->readBuf[0] == '\r') {
-                    conn->readBuf.erase(0, 2);
-                }
-                try {
-                    command->Execute(*pStorage, str_command, conn->outBuf);
-                    conn->outBuf += "\r\n";
-                } catch (std::runtime_error &ex) {
-                    conn->outBuf = std::string("WORKER_CONNECTION_ERROR ") + ex.what() + "\r\n";
-                    conn->readBuf.clear();
-                }
-                parser.Reset();
-                conn->state = State::Write;
-            } else {
-                conn->state = State::Read;
-            }
-        }
-
-        if (conn->state == State::Write) {
-            size_t n_sent = 0;
-            int n_write = 1;
-            while (n_sent < conn->outBuf.size()) {
-                n_write = write(socket, conn->outBuf.c_str(), conn->outBuf.size());
-
-                if (n_write > 0) {
-                    n_sent += n_write;
-                    conn->outBuf.erase(0, n_write);
-                } else {
-                    break;
-                }
-            }
-
-            if (n_write < 0) {
-                if (!((errno == EWOULDBLOCK || errno == EAGAIN) && running.load())) {
-                    return true;
-                }
-            }
-
-            if (conn->outBuf.size() == 0) {
-                conn->state = State::Read;
-                if (conn->readBuf.size() == 0) {
-                    return false;
-                }
-            }
-        }
+                   conn->bytes_sent_total += n_sent;
+               }
+           }
+           conn->bytes_sent_total = 0;
+           conn->state = State::Read;
+       }
     }
     return false;
 }
@@ -236,7 +235,7 @@ void Worker::OnRun(int _server_socket) {
                     epoll_ctl(epfd, EPOLL_CTL_DEL, client_socket, NULL);
                     EraseConnection(client_socket);
                 } else if (events_buffer[i].events & (EPOLLIN | EPOLLOUT)) {
-                    if (!Read(connection)) {
+                    if (!Proc(connection)) {
                         epoll_ctl(epfd, EPOLL_CTL_DEL, client_socket, NULL);
                         EraseConnection(client_socket);
                     }
