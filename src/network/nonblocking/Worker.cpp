@@ -20,9 +20,12 @@
 #include "../../protocol/Parser.h"
 #include <afina/execute/Command.h>
 #include "Utils.h"
+#include "Connection.cpp"
 
-#define EPOLLEXCLUSIVE 1<<28
-#define BUF_SIZE 1024
+#ifndef EPOLLEXCLUSIVE
+    #define EPOLLEXCLUSIVE 1<<28
+#endif
+
 #define EPOLL_MAX_EVENTS 10
 
 namespace Afina {
@@ -68,102 +71,6 @@ void Worker::Join() {
     shutdown(server_socket, SHUT_RDWR);
     pthread_join(thread, NULL);
 }
-//
-// bool Worker::Proc(Connection* conn) {
-//     auto buffer = conn->buffer;
-//     int socket = conn->socket;
-//
-//     while (running.load()) {
-//         try {
-//             // read command
-//            if (conn->state == State::Read) {
-//                size_t parsed = 0;
-//                while (!conn->parser.Parse(buffer, conn->position, parsed)) {
-//                    std::memmove(buffer, buffer + parsed, conn->position - parsed);
-//                    conn->position -= parsed;
-//
-//                    ssize_t n_read = recv(conn->socket, buffer + conn->position, BUF_SIZE - conn->position, 0);
-//                    if (n_read <= 0) {
-//                        if ((errno == EWOULDBLOCK || errno == EAGAIN) && n_read < 0 && running.load()) {
-//                            return true;
-//                        } else {
-//                            return false;
-//                        }
-//                    }
-//
-//                    conn->position += n_read;
-//                }
-//                std::memmove(buffer, buffer + parsed, conn->position - parsed);
-//                conn->position -= parsed;
-//
-//                conn->cmd = conn->parser.Build(conn->body_size);
-//                conn->body_size += 2;
-//                conn->parser.Reset();
-//
-//                conn->body.clear();
-//                conn->state = State::Body;
-//            }
-//            // read body
-//            if (conn->state == State::Body) {
-//                if (conn->body_size > 2) {
-//                    while (conn->body_size > conn->position) {
-//                        conn->body.append(buffer, conn->position);
-//                        conn->body_size -= conn->position;
-//                        conn->position = 0;
-//
-//
-//                        ssize_t n_read = recv(conn->socket, buffer, BUF_SIZE, 0);
-//                        if (n_read <= 0) {
-//                            if ((errno == EWOULDBLOCK || errno == EAGAIN) && n_read < 0 && running.load()) {
-//                                return true;
-//                            } else {
-//                                return false;
-//                            }
-//                        }
-//
-//                        conn->position = n_read;
-//                    }
-//
-//                    conn->body.append(buffer, conn->body_size);
-//                    std::memmove(buffer, buffer + conn->body_size, conn->position - conn->body_size);
-//                    conn->position -= conn->body_size;
-//
-//                    conn->body = conn->body.substr(0, conn->body.length() - 2);
-//                }
-//
-//                conn->cmd->Execute(*pStorage, conn->body, conn->out);
-//                conn->out.append("\r\n");
-//                conn->state = State::Write;
-//            }
-//        } catch (std::runtime_error &e) {
-//            std::string err = std::string("SERVER_ERROR ") + e.what() + std::string("\r\n");
-//            std::cout << err << std::endl;
-//            conn->parser.Reset();
-//            return false;
-//            //conn->state = State::Write;
-//        }
-//        if (conn->state == State::Write) {
-//            if (conn->out.size() > 2) {
-//                while (conn->bytes_sent_total < conn->out.size()) {
-//
-//                    ssize_t n_sent = send(socket, conn->out.data() + conn->bytes_sent_total, conn->out.size() - conn->bytes_sent_total, 0);
-//                    if (n_sent < 0) {
-//                         if ((errno == EWOULDBLOCK || errno == EAGAIN) && running.load()) {
-//                             return true;
-//                         } else {
-//                             return false;
-//                         }
-//                     }
-//
-//                    conn->bytes_sent_total += n_sent;
-//                }
-//            }
-//            conn->bytes_sent_total = 0;
-//            conn->state = State::Read;
-//        }
-//     }
-//     return false;
-// }
 
 void Worker::EraseConnection(int client_socket) {
     for (auto it = connections.begin(); it != connections.end(); it++) {
