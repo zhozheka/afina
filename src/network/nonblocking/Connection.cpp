@@ -122,11 +122,12 @@ public:
                    state = State::Write;
                }
            } catch (std::runtime_error &e) {
-               std::string err = std::string("SERVER_ERROR ") + e.what() + std::string("\r\n");
-               std::cout << err << std::endl;
+               out = std::string("SERVER_ERROR ") + e.what() + std::string("\r\n");
+               std::cout << "error catched: " << e.what() <<  std::endl;
+               position = 0;
                parser.Reset();
-               return false;
-               //state = State::Write;
+               //return false;
+               state = State::Write;
            }
            if (state == State::Write) {
                if (out.size() > 2) {
