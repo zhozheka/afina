@@ -80,7 +80,7 @@ void Worker::EraseConnection(int client_socket) {
         }
     }
     //for (auto &conn: connections) {
-    //     if (conn->socket == client_socket) {
+    //     if (conn->socket  == client_socket) {
     //         connection.erase(conn);
     //     }
     // }
@@ -142,7 +142,8 @@ void Worker::OnRun(int _server_socket) {
                     epoll_ctl(epfd, EPOLL_CTL_DEL, client_socket, NULL);
                     EraseConnection(client_socket);
                 } else if (events_buffer[i].events & (EPOLLIN | EPOLLOUT)) {
-                    if (!connection->Proc()) {
+
+                    if (!connection->Proc(events_buffer[i].events)) {
                         //delete connection;
                         epoll_ctl(epfd, EPOLL_CTL_DEL, client_socket, NULL);
                         EraseConnection(client_socket);

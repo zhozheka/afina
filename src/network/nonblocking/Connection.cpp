@@ -57,11 +57,10 @@ public:
 
 
 
-    bool Proc() {
+    bool Proc(uint32_t events) {
 
         while (running.load()) {
             try {
-                // read command
                if (state == State::Read) {
                    size_t parsed = 0;
                    while (!parser.Parse(buffer, position, parsed)) {
@@ -121,33 +120,39 @@ public:
                    out.append("\r\n");
                    state = State::Write;
                }
+
            } catch (std::runtime_error &e) {
                out = std::string("SERVER_ERROR ") + e.what() + std::string("\r\n");
-               std::cout << "error catched: " << e.what() <<  std::endl;
+               //std::cout << "error catched: " << e.what() <<  std::endl;
                position = 0;
                parser.Reset();
                //return false;
                state = State::Write;
            }
-           if (state == State::Write) {
-               if (out.size() > 2) {
-                   while (bytes_sent_total < out.size()) {
 
-                       ssize_t n_sent = send(socket, out.data() + bytes_sent_total, out.size() - bytes_sent_total, 0);
-                       if (n_sent < 0) {
-                            if ((errno == EWOULDBLOCK || errno == EAGAIN) && running.load()) {
-                                return true;
-                            } else {
-                                return false;
+
+           if (events & EPOLLOUT) {
+               if (state == State::Write) {
+                   if (out.size() > 2) {
+                       while (bytes_sent_total < out.size()) {
+
+                           ssize_t n_sent = send(socket, out.data() + bytes_sent_total, out.size() - bytes_sent_total, 0);
+                           if (n_sent < 0) {
+                                if ((errno == EWOULDBLOCK || errno == EAGAIN) && running.load()) {
+                                    return true;
+                                } else {
+                                    return false;
+                                }
                             }
-                        }
 
-                       bytes_sent_total += n_sent;
+                           bytes_sent_total += n_sent;
+                       }
                    }
+                   bytes_sent_total = 0;
+                   //state = State::Read;
                }
-               bytes_sent_total = 0;
-               state = State::Read;
            }
+           state = State::Read;
         }
         return false;
     }
